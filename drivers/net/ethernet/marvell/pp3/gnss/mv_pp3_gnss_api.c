@@ -93,19 +93,24 @@ int mv_pp3_gnss_dev_create(unsigned short vport, bool state, unsigned char *mac)
 	char name[10];
 	struct net_device *dev;
 	struct pp3_dev_priv *dev_priv;
-	int msec;
+	int msec, rxqs_num, txqs_num;
 
 	/* Special name nss0 for network interface used for default gateway */
-	if (vport == MV_NSS_EXT_PORT_MAX)
+	if (vport == MV_NSS_EXT_PORT_MAX) {
 		sprintf(name, "nss%d", 0);
-	else
+		rxqs_num = CONFIG_MV_PP3_RXQ_NUM;
+		txqs_num = CONFIG_MV_PP3_TXQ_NUM;
+	} else {
 		sprintf(name, "nss%d", vport);
+		rxqs_num = mv_pp3_gnss_rxq_num;
+		txqs_num = mv_pp3_gnss_txq_num;
+	}
 
 	/* check MAC validation */
 	if (mac && !is_valid_ether_addr(mac))
 		return -EADDRNOTAVAIL;
 
-	dev = mv_pp3_netdev_init(name, mv_pp3_gnss_rxq_num, mv_pp3_gnss_txq_num);
+	dev = mv_pp3_netdev_init(name, rxqs_num, txqs_num);
 	if (!dev)
 		goto oom;
 

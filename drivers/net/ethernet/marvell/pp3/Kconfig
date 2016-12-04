@@ -87,7 +87,7 @@ config MV_PP3_RXQ_SIZE
 
 config  MV_PP3_TXQ_NUM
 	int "Number of TX VQs for NIC devices"
-        default 1
+        default 2
         ---help---
 	Number of virtual TXQs for each NIC network interface
 
