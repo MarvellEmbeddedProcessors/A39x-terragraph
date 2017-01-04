@@ -28,6 +28,7 @@
 #include "gop/mv_tai_regs.h"
 #include "gop/mv_ptp_if.h"
 #include "net_dev/mv_ptp_service.h"
+#include "platform/mv_pp3_defs.h"
 
 static void mv_pp3_tai_tod_from_kernel(int prt_off_on_extend);
 static void mv_pp3_tai_tod_and_kernel_print(int prt_off_on_extend);
@@ -414,4 +415,17 @@ void mv_pp3_tai_reg_dump(void)
 	mv_pp3_ptp_reg_print("INCOMING_CLOCKIN_CNTING_CFG_LOW", MV_TAI_INCOMING_CLOCKIN_CNTING_CFG_LOW_REG);
 	mv_pp3_ptp_reg_print("TIME_UPDATE_CNTR_MSB", MV_TAI_TIME_UPDATE_CNTR_MSB_REG);
 	mv_pp3_ptp_reg_print("INCOMING_CLOCKIN_CNTING_CFG_HIGH", MV_TAI_INCOMING_CLOCKIN_CNTING_CFG_HIGH_REG);
+}
+
+ssize_t mv_ptp_netdev_name_get_sysfs(char *buf)
+{
+	int port, sz = 0;
+	char name_buf[16/*IFNAMSIZ*/];
+
+	for (port = 0; port < MV_PP3_EMAC_NUM; port++) {
+		if (!mv_ptp_netdev_name_get(port, name_buf))
+			sz += scnprintf(buf + sz, PAGE_SIZE,
+				"ptp_port_%d = <%s>\n", port, name_buf);
+	}
+	return sz;
 }

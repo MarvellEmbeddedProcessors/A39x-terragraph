@@ -191,6 +191,22 @@ void mv_ptp_hook_enable(int port, bool enable)
 	}
 }
 
+int mv_ptp_netdev_name_get(int port, char *name_buf)
+{
+	struct pp3_dev_priv *dev_priv;
+
+	if (port >= MV_PP3_EMAC_NUM)
+		return -EINVAL;
+
+	dev_priv = mv_pp3_emac_dev_priv_get(port);
+
+	if (!dev_priv || !name_buf)
+		return -EINVAL;
+
+	/* Name found, copy into given name-buffer */
+	strcpy(name_buf, dev_priv->dev->name);
+	return 0;
+}
 
 /***************************************************************************
  **  Real-Time used utilities

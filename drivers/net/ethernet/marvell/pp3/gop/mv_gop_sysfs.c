@@ -34,6 +34,7 @@ disclaimer.
 #include "gop/mv_tai_regs.h"
 #include "gop/pcs/mv_xpcs_if.h"
 #include "gop/serdes/mv_serdes_if.h"
+#include "net_dev/mv_ptp_service.h"
 #ifdef CONFIG_ARCH_MVEBU
 #include "net_complex/mv_net_complex_a39x.h"
 #include "gop/mac/mv_xlg_mac_if.h"
@@ -89,6 +90,7 @@ static ssize_t mv_gop_ptp_help(char *b)
 	o += scnprintf(b + o, PAGE_SIZE - o, "cat              tai_regs  - show TAI unit registers\n");
 	o += scnprintf(b + o, PAGE_SIZE - o, "cat              tai_tod   - show TAI time capture values\n");
 	o += scnprintf(b + o, PAGE_SIZE - o, "cat              tai_clock - show TAI clock status\n");
+	o += scnprintf(b + o, PAGE_SIZE - o, "cat              ptp_netif - get netdev-port mapping\n");
 	o += scnprintf(b + o, PAGE_SIZE - o, "echo [p]       > ptp_regs  - show PTP unit registers\n");
 	o += scnprintf(b + o, PAGE_SIZE - o, "echo [p] [0/1] > ptp_en    - enable(1) / disable(0) PTP unit\n");
 	o += scnprintf(b + o, PAGE_SIZE - o, "echo [p]       > ptp_reset - reset given port PTP unit\n");
@@ -161,6 +163,8 @@ static ssize_t mv_gop_ptp_show(struct device *dev,
 		mv_pp3_tai_tod_dump();
 	else if (!strcmp(name, "tai_clock"))
 		off = mv_pp3_tai_clock_status_get_sysfs(buf);
+	else if (!strcmp(name, "ptp_netif"))
+		off = mv_ptp_netdev_name_get_sysfs(buf);
 	else {
 		off = 1;
 		pr_err("%s: illegal operation <%s>\n", __func__, attr->attr.name);
@@ -354,6 +358,7 @@ static struct attribute *mv_gop_attrs[] = {
 static DEVICE_ATTR(help_ptp,		S_IRUSR, mv_gop_ptp_show, NULL);
 static DEVICE_ATTR(tai_regs,		S_IRUSR, mv_gop_ptp_show, NULL);
 static DEVICE_ATTR(tai_clock,		S_IRUSR, mv_gop_ptp_show, NULL);
+static DEVICE_ATTR(ptp_netif,		S_IRUSR, mv_gop_ptp_show, NULL);
 static DEVICE_ATTR(tai_tod,		S_IRUSR, mv_gop_ptp_show, NULL);
 static DEVICE_ATTR(tai_tod_load_value,	S_IWUSR, NULL, mv_gop_3_hex_store);
 static DEVICE_ATTR(tai_op,		S_IWUSR, NULL, mv_gop_3_hex_store);
@@ -365,6 +370,7 @@ static struct attribute *mv_gop_ptp_attrs[] = {
 	&dev_attr_help_ptp.attr,
 	&dev_attr_tai_regs.attr,
 	&dev_attr_tai_clock.attr,
+	&dev_attr_ptp_netif.attr,
 	&dev_attr_tai_tod.attr,
 	&dev_attr_tai_tod_load_value.attr,
 	&dev_attr_tai_op.attr,

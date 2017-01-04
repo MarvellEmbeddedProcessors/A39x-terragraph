@@ -27,6 +27,8 @@
 
 void mv_ptp_hook_enable(int port, bool enable);
 void mv_ptp_hook_extra_op(u32 val1, u32 val2, u32 val3);
+int mv_ptp_netdev_name_get(int port, char *name_buf);
+ssize_t mv_ptp_netdev_name_get_sysfs(char *buf);
 
 #ifdef __KERNEL__
 /* Probre/Init should be called with/after mv_pp3_ptp_enable() */
