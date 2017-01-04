@@ -3470,6 +3470,17 @@ void mv_pp3_dev_rx_resume(struct net_device *dev, int cos)
 
 	return;
 }
+
+static int mv_pp3_get_phys_port_id(struct net_device *netdev,
+				   struct netdev_phys_item_id *ppid)
+{
+	struct pp3_dev_priv *dev_priv = MV_PP3_PRIV(netdev);
+
+	ppid->id_len = 1;
+	ppid->id[0] = (unsigned char)dev_priv->id;
+	return 0;
+}
+
 /*---------------------------------------------------------------------------*/
 
 
@@ -3483,6 +3494,7 @@ static const struct net_device_ops mv_pp3_netdev_ops = {
 	.ndo_set_mac_address = mv_pp3_set_mac_addr,
 	.ndo_init	     = mv_pp3_late_init,
 	.ndo_fix_features    = mv_pp3_netdev_fix_features,
+	.ndo_get_phys_port_id = mv_pp3_get_phys_port_id,
 /*
 	.ndo_select_queue    = mv_pp3_select_txq,
 	.ndo_tx_timeout      = mv_pp3_tx_timeout,
