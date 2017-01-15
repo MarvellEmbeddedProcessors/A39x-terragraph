@@ -2225,6 +2225,7 @@ static netdev_features_t mv_pp3_netdev_fix_features(struct net_device *dev, netd
 int mv_pp3_netdev_set_emac_params(struct net_device *dev, struct device_node *np)
 {
 	struct pp3_dev_priv *dev_priv;
+	struct device_node *emac_node;
 
 	if (!dev) {
 		pr_err("%s: network device pointer is NULL\n", dev->name);
@@ -2233,10 +2234,20 @@ int mv_pp3_netdev_set_emac_params(struct net_device *dev, struct device_node *np
 
 	dev_priv = MV_PP3_PRIV(dev);
 
-	if (of_property_read_u32(np, "id", &dev_priv->id)) {
-		pr_err("could not get port ID\n");
-		goto err;
+	/* emac_id may differ from nicID in DTS: nic@N <&emacX> */
+	emac_node = of_parse_phandle(np, "emac-data", 0);
+	if (emac_node) {
+		if (of_property_read_u32(emac_node, "emac_id", &dev_priv->id))
+			emac_node = NULL;
 	}
+	if (!emac_node) {
+		 /* No "emac_id" in DTS. Use common "id" for nic and emac */
+		if (of_property_read_u32(np, "id", &dev_priv->id)) {
+			pr_err("could not get port ID\n");
+			goto err;
+		}
+	}
+
 	mv_pp3_ftd_mac_data_get(np, &dev_priv->mac_data);
 	mv_pp3_fdt_mac_address_get(np, dev_priv->dev->dev_addr);
 
