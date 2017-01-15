@@ -654,24 +654,30 @@
 				mg-remap-base = <0>;
 			};
 
+			/* emac-data/emacN:emac_id may differ from nicID: */
+			/* use nic@N with <&emacX> if N!=X mapping required */
 			emac0: mac0 {
 				interrupts = <GIC_SPI 49 IRQ_TYPE_LEVEL_HIGH>;  /* Link IRQ */
 				mac-address = [ 00 00 00 00 00 00 ];
+				emac_id = <0>;
 			};
 
 			emac1: mac1 {
 				interrupts = <GIC_SPI 50 IRQ_TYPE_LEVEL_HIGH>;  /* Link IRQ */
 				mac-address = [ 00 00 00 00 00 00 ];
+				emac_id = <1>;
 			};
 
 			emac2: mac2 {
 				interrupts = <GIC_SPI 51 IRQ_TYPE_LEVEL_HIGH>;  /* Link IRQ */
 				mac-address = [ 00 00 00 00 00 00 ];
+				emac_id = <2>;
 			};
 
 			emac3: mac3 {
 				interrupts = <GIC_SPI 52 IRQ_TYPE_LEVEL_HIGH>;  /* Link IRQ */
 				mac-address = [ 00 00 00 00 00 00 ];
+				emac_id = <3>;
 			};
 		};
 
