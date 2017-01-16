@@ -1,0 +1,292 @@
+/*
+ * Device Tree file for Facebook Terragraph Digital Board EVT 2.0
+ */
+
+/dts-v1/;
+/memreserve/ 0x00000000 0x00004000;  /* 16kB reserved for NSS/HW */
+
+#include "armada-390.dtsi"
+
+/ {
+	model = "Facebook Terragraph Digital Board EVT 2.0";
+	compatible = "marvell,a390-db", "marvell,armada390", "marvell,armada380";
+
+	chosen {
+		bootargs = "console=ttyS0,115200 earlyprintk";
+	};
+
+	memory {
+		device_type = "memory";
+		reg = <0x00000000 0x40000000>; /* 256 MB */
+	};
+
+	soc {
+		ranges = <MBUS_ID(0xf0, 0x01) 0 0xf1000000 0x100000
+			  MBUS_ID(0x01, 0x1d) 0 0xfff00000 0x100000
+			  MBUS_ID(0x09, 0x19) 0 0xf1100000 0x10000	/* CESA0: PHYS=0xf1100000
+									   size 64K - used for CPU Idel WA*/
+			  MBUS_ID(0x09, 0x15) 0 0xf1110000 0x10000	/* CESA1: PHYS=0xf1110000 - used for CPU Idel WA */
+			  MBUS_ID(NSS_TARGET_ID, NSS_REGS_ATTR)  0 0xf5000000 NSS_REGS_SIZE	/* nss window, 16M */
+			  MBUS_ID(NSS_TARGET_ID, NSS_SPACE_ATTR) 0 0xD0000000 NSS_SPACE_SIZE>;	/* mac_nic window, (nss internal window) 128M */
+		internal-regs {
+			spi@10680 {
+				status = "disabled";
+				pinctrl-0 = <&spi1_pins>;
+				pinctrl-names = "default";
+
+				spi-flash@1 {
+					#address-cells = <1>;
+					#size-cells = <1>;
+					compatible = "n25q128a13", "jedec,spi-nor";
+					reg = <0>; /* Chip select 0 */
+					spi-max-frequency = <108000000>;
+
+					partition@0 {
+						label = "U-Boot";
+						reg = <0 0x400000>;
+					};
+					partition@400000 {
+						label = "Filesystem";
+						reg = <0x400000 0xc00000>;
+					};
+				};
+			};
+
+			lis3_reg: fixedregulator@1 {
+				compatible = "regulator-fixed";
+				regulator-name = "lis3_reg";
+				regulator-min-microvolt = <3300000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-boot-on;
+			};
+
+			i2c@11000 {
+			  compatible = "marvell,mv78230-i2c";
+				status = "okay";
+				clock-frequency = <100000>;
+			};
+
+			i2c@11100 {
+			  compatible = "marvell,mv78230-i2c";
+				status = "disabled";
+				clock-frequency = <100000>;
+			};
+
+			i2c@11200 {
+			  compatible = "marvell,mv78230-i2c";
+				status = "okay";
+				clock-frequency = <100000>;
+
+				lis331dlh: lis331dlh@18 {
+					compatible = "st,lis3lv02d";
+					reg = <0x19>;
+					Vdd-supply = <&lis3_reg>;
+					Vdd_IO-supply = <&lis3_reg>;
+
+					st,click-single-x;
+					st,click-single-y;
+					st,click-single-z;
+					st,click-thresh-x = <10>;
+					st,click-thresh-y = <10>;
+					st,click-thresh-z = <10>;
+					st,irq1-click;
+					st,irq2-click;
+					st,wakeup-x-lo;
+					st,wakeup-x-hi;
+					st,wakeup-y-lo;
+					st,wakeup-y-hi;
+					st,wakeup-z-lo;
+					st,wakeup-z-hi;
+					st,min-limit-x = <120>;
+					st,min-limit-y = <120>;
+					st,min-limit-z = <140>;
+					st,max-limit-x = <550>;
+					st,max-limit-y = <550>;
+					st,max-limit-z = <750>;
+				};
+
+				ublox@42 {
+					compatible = "facebook,ublox-gps";
+					reg = <0x42>;
+				};
+
+				lm75: lm75@48 {
+					compatible = "national,lm75";
+					reg = <0x48>;
+				};
+
+				rtc@51 {
+					compatible = "nxp,pcf8563";
+					reg = <0x51>;
+					irq-gpio = <54>; //MPP54 as gpio for interrupt
+				};
+
+				eeprom@54 {
+					compatible = "ramtron,24c64";
+					reg = <0x54>;
+					pagesize = <32>;
+				};
+
+			};
+
+			i2c@11300 {
+			  compatible = "marvell,mv78230-i2c";
+				status = "disabled";
+				clock-frequency = <100000>;
+			};
+
+			mdio {
+				phy1: ethernet-phy@1 {
+					reg = <1>;
+				};
+			};
+
+			serial@12000 {
+				status = "okay";
+			};
+
+			usb@58000 {
+				status = "okay";
+			};
+
+			flash@d0000 {
+                                status = "okay";
+                                pinctrl-0 = <&nand_pins>;
+                                pinctrl-names = "default";
+                                num-cs = <1>;
+                                marvell,nand-keep-config;
+                                marvell,nand-enable-arbiter;
+                                nand-on-flash-bbt;
+                                nand-ecc-strength = <8>;
+                                nand-ecc-step-size = <512>;
+
+				mtd0@00000000 {
+					label = "u-boot";
+					reg = <0x00000000 0x00500000>;
+					read-only;
+				};
+
+				mtd1@00500000 {
+					label = "u-boot-env";
+					reg = <0x00500000 0x00400000>;
+				};
+
+				mtd2@00a00000 {
+					label = "kernel1";
+					reg = <0x00a00000 0x04000000>;
+				};
+
+				mtd3@04a00000 {
+					label = "rootfs1";
+					reg = <0x04a00000 0x18000000>;
+				};
+
+				mtd4@1ca00000 {
+					label = "kernel2";
+					reg = <0x1ca00000 0x04000000>;
+				};
+
+				mtd5@20a00000 {
+					label = "rootfs2";
+					reg = <0x20a00000 0x18000000>;
+				};
+
+				mtd6@38a00000 {
+					label = "data";
+					reg = <0x38a00000 0x07600000>;
+				};
+			};
+
+			sdhci@d8000 {
+				clock-frequency = <200000000>;
+				broken-cd;
+				wp-inverted;
+				bus-width = <8>;
+				status = "disabled";
+				no-1-8-v;
+			};
+
+			usb3@f8000 {
+				status = "okay";
+			};
+
+		};
+
+		nss_complex {
+			status = "okay";
+			pinctrl-0 = <&smi_nss_pins>;
+			pinctrl-names="default";
+		};
+
+		gop {
+			emac0: mac0 {
+				phy-mode = "rxaui";
+			};
+
+			emac1: mac1 {
+				phy-mode = "sgmii";
+				phy-speed = <1000>;
+				force-link = "no";
+				phy = <&phy1>;
+			};
+
+			emac2: mac2 {
+				phy-mode = "sgmii";
+				phy-speed = <2500>;
+				force-link = "yes";
+			};
+
+		};
+
+		pp3_platform {
+			status = "okay";
+
+			/* use nic@N with <&emacX> if N!=X mapping required */
+			/* nic0 - emac1  1.0GB */
+			/* nic1 - emac2  2.5GB */
+			/* nic2 - emac0  10 GB */
+			nic@0 {
+				status = "okay";
+				emac-data = <&emac1>;
+			};
+
+			nic@1 {
+				status = "okay";
+				emac-data = <&emac2>;
+			};
+
+			nic@2 {
+				status = "okay";
+				emac-data = <&emac0>;
+			};
+
+			nss@0 {
+				status = "okay";
+			};
+		};
+
+		pcie-controller {
+			status = "okay";
+			/*
+			 * The three PCIe units are accessible through
+			 * standard PCIe slots on the board.
+			 */
+			pcie@1,0 {
+				/* Port 0, Lane 0 */
+				status = "okay";
+			};
+			pcie@2,0 {
+				/* Port 1, Lane 0 */
+				status = "okay";
+			};
+			pcie@3,0 {
+				/* Port 2, Lane 0 */
+				status = "disabled";
+			};
+			pcie@4,0 {
+				/* Port 3, Lane 0 */
+				status = "disabled";
+			};
+		};
+	};
+};

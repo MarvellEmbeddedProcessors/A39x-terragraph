@@ -760,7 +760,8 @@ dtb-$(CONFIG_MACH_ARMADA_39X) += \
 	armada-390-db.dtb \
 	armada-395-amc.dtb \
 	armada-395-gp-eap.dtb \
-	armada-395-gp-gw.dtb
+	armada-395-gp-gw.dtb \
+	terragraph-390-fb-evt20.dtb
 dtb-$(CONFIG_MACH_ARMADA_XP) += \
 	armada-xp-axpwifiap.dtb \
 	armada-xp-db.dtb \
