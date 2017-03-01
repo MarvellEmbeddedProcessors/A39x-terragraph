@@ -43,6 +43,8 @@ unsigned long __stack_chk_guard __read_mostly;
 EXPORT_SYMBOL(__stack_chk_guard);
 #endif
 
+#include "process_show_extra_reg.h"
+
 static const char *processor_modes[] __maybe_unused = {
   "USER_26", "FIQ_26" , "IRQ_26" , "SVC_26" , "UK4_26" , "UK5_26" , "UK6_26" , "UK7_26" ,
   "UK8_26" , "UK9_26" , "UK10_26", "UK11_26", "UK12_26", "UK13_26", "UK14_26", "UK15_26",
@@ -177,6 +179,10 @@ void __show_regs(struct pt_regs *regs)
 
 		printk("Control: %08x%s\n", ctrl, buf);
 	}
+#endif
+
+#ifdef SHOW_EXTRA_REGISTER_DATA /* From include<process_show_extra_reg.h> */
+	show_extra_register_data(regs, 128);
 #endif
 }
 
