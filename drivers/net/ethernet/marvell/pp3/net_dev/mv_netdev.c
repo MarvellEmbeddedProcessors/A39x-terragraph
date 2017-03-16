@@ -1390,14 +1390,19 @@ static inline int mv_pp3_skb_egress_prio_get(struct net_device *dev, struct sk_b
 
 /*---------------------------------------------------------------------------*/
 /* Choose TX SWQ per CPU */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0)
-static inline u16 mv_pp3_select_txq(struct net_device *dev, struct sk_buff *skb)
-#else
-static inline u16 mv_pp3_select_txq(struct net_device *dev, struct sk_buff *skb,
-					void *accel_priv, select_queue_fallback_t fallback)
-#endif
+static u16 mv_pp3_select_txq(struct net_device *dev, struct sk_buff *skb,
+			      void *accel_priv, select_queue_fallback_t fallback)
 {
-	return smp_processor_id();
+	u16 qid;
+
+	if (skb->ooo_okay) {
+		qid = smp_processor_id();
+	} else {
+		qid = fallback(dev, skb);
+		if (qid >= dev->real_num_tx_queues)
+			qid = smp_processor_id();
+	}
+	return qid;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -3206,6 +3211,8 @@ static int mv_pp3_tx(struct sk_buff *skb, struct net_device *dev)
 	int txdone_todo, txdone_free;
 	struct pp3_dev_priv *dev_priv = MV_PP3_PRIV(dev);
 	struct pp3_vport *cpu_vp = dev_priv->cpu_vp[cpu];
+	struct pp3_vport *cpu_vp_q;
+	int qid;
 	struct pp3_vq *tx_vq = NULL;
 	struct pp3_swq *tx_swq = NULL;
 	struct pp3_pool *ppool;
@@ -3218,6 +3225,9 @@ static int mv_pp3_tx(struct sk_buff *skb, struct net_device *dev)
 	int ptp_ts_offs = 0;
 	int tx_ts_queue;
 #endif
+
+	qid = skb_get_queue_mapping(skb);
+	cpu_vp_q = dev_priv->cpu_vp[qid];
 
 	MV_LIGHT_LOCK(flags);
 
@@ -3246,7 +3256,7 @@ static int mv_pp3_tx(struct sk_buff *skb, struct net_device *dev)
 	vq = mv_pp3_egress_cos_to_vq_get(cpu_vp, cos);
 
 	/* virtual queue equal software queue */
-	tx_vq = cpu_vp->tx_vqs[vq];
+	tx_vq = cpu_vp_q->tx_vqs[vq];
 	tx_swq = tx_vq->swq;
 
 	/* Add dummy Marvell header to skb */
@@ -3280,6 +3290,7 @@ static int mv_pp3_tx(struct sk_buff *skb, struct net_device *dev)
 	if (pmdata)
 		mv_pp3_mdata_copy_to_cfh(pmdata, cfh);
 	else {
+		/* Metadata is used for FW Per-CPU statistic. Keep cpu but not qid here */
 		global_cpu_vp = MV_PP3_CPU_VPORT_ID(cpu_vp->port.cpu.cpu_num);
 		mv_pp3_mdata_build_on_cfh(global_cpu_vp, cpu_vp->dest_vp, cos, cfh);
 	}
@@ -3301,7 +3312,7 @@ static int mv_pp3_tx(struct sk_buff *skb, struct net_device *dev)
 				MV_CFH_LEN_SET(cfh_size) | MV_CFH_MDATA_BIT_SET |
 				MV_CFH_MODE_SET(HMAC_CFH) | MV_CFH_PP_MODE_SET(PP_TX_PACKET_NSS);
 
-	l3_l4_info = mv_pp3_skb_tx_csum(skb, cpu_vp);
+	l3_l4_info = mv_pp3_skb_tx_csum(skb, cpu_vp); /* cpu_vp per-cpu statistic */
 
 	if (l3_l4_info) {
 		/* QC bit set at cfh word1 only if l3 or l4 checksum are calc by HW*/
@@ -3309,6 +3320,7 @@ static int mv_pp3_tx(struct sk_buff *skb, struct net_device *dev)
 		cfh->ctrl |= MV_CFH_QC_BIT_SET;
 	}
 
+	/* Use TXDONE-pool per cpu but not per qid */
 	ppool = cpu_vp->port.cpu.cpu_shared->txdone_pool;
 	cfh->vm_bp = MV_CFH_BPID_SET(ppool->pool);
 	txdone_todo = PPOOL_BUF_TXDONE(ppool, cpu);
@@ -3507,8 +3519,8 @@ static const struct net_device_ops mv_pp3_netdev_ops = {
 	.ndo_init	     = mv_pp3_late_init,
 	.ndo_fix_features    = mv_pp3_netdev_fix_features,
 	.ndo_get_phys_port_id = mv_pp3_get_phys_port_id,
-/*
 	.ndo_select_queue    = mv_pp3_select_txq,
+/*
 	.ndo_tx_timeout      = mv_pp3_tx_timeout,
 	.ndo_get_stats64     = mvneta_get_stats64,
 */
