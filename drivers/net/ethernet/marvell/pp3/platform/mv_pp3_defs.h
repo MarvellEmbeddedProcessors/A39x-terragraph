@@ -52,8 +52,10 @@
 /* translate cpu virtual port it to CPU number */
 #define MV_PP3_CPU_VPORT_TO_CPU(cpu_vp)	((cpu_vp) - MV_NSS_CPU_PORT_MIN)
 
-
 #define MV_PP3_DEV_NUM			(MV_NSS_EXT_PORT_NUM + MV_PP3_EMAC_NUM) /* max number of network devices */
+
+/* Packet Metadata CoS. Keep same as in gnss/types.h */
+#define MV_NSS_COS_NONE		(0xFE) /* Invalid or unknown CoS ~ force calculation */
 
 #define MV_PP3_BM_POOL_HROOM_RES	(32)
 

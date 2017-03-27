@@ -3292,7 +3292,7 @@ static int mv_pp3_tx(struct sk_buff *skb, struct net_device *dev)
 	else {
 		/* Metadata is used for FW Per-CPU statistic. Keep cpu but not qid here */
 		global_cpu_vp = MV_PP3_CPU_VPORT_ID(cpu_vp->port.cpu.cpu_num);
-		mv_pp3_mdata_build_on_cfh(global_cpu_vp, cpu_vp->dest_vp, cos, cfh);
+		mv_pp3_mdata_build_on_cfh(global_cpu_vp, cpu_vp->dest_vp, MV_NSS_COS_NONE, cfh);
 	}
 
 	cfh_data_len = MV_MIN(MV_PP3_CFH_PAYLOAD_MAX_SIZE, pkt_len);
