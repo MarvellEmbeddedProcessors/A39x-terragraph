@@ -3195,7 +3195,7 @@ static inline u8 mv_pp3_cos_get(struct sk_buff *skb)
 
 	pmdata = (struct mv_nss_metadata *)mv_pp3_gnss_skb_mdata_get(skb->dev, skb);
 
-	if (pmdata)
+	if (pmdata && (pmdata->cos != MV_NSS_COS_NONE))
 		return (u8)(pmdata->cos);
 
 	return skb->priority;
