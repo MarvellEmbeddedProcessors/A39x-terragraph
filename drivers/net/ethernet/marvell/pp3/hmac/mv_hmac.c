@@ -554,7 +554,9 @@ void mv_pp3_hmac_txq_event_cfg(int frame, int queue, int group)
 /************************ Print HMAC Frame unit register **************************************/
 static void mv_pp3_hmac_fr_reg_print(int frame, char *reg_name, u32 reg)
 {
-	pr_info("  %-32s: 0x%04x = 0x%08x\n", reg_name, reg, mv_pp3_hmac_frame_reg_read(frame, reg));
+	pr_info("  %-32s: 0x%04x = 0x%08x\n", reg_name,
+		mv_pp3_hmac_frame_offset(frame) + reg,
+		mv_pp3_hmac_frame_reg_read(frame, reg));
 }
 
 static void mv_pp3_hmac_global_reg_print(char *reg_name, u32 reg)
@@ -571,7 +573,7 @@ void mv_pp3_hmac_rxq_regs_dump(int frame, int queue)
 		return;
 
 	pr_info("\n-------------- HMAC RX (frame = %d, queue = %d) regs (%p)-----------\n",
-		frame, queue, pp3_hmac_fr.base_addr + pp3_hmac_fr.ins_offs * frame);
+		frame, queue, pp3_hmac_fr.base_addr + mv_pp3_hmac_frame_offset(frame));
 	mv_pp3_hmac_fr_reg_print(frame, "QUEUE CONTROL", MV_HMAC_RX_Q_CTRL_REG(queue));
 	mv_pp3_hmac_fr_reg_print(frame, "QUEUE STATUS", MV_HMAC_RX_Q_STATUS_REG(queue));
 	mv_pp3_hmac_fr_reg_print(frame, "QUEUE ADDRESS LOW", MV_PP3_HMAC_RQ_ADDR_LOW(queue));
@@ -593,7 +595,7 @@ void mv_pp3_hmac_txq_regs_dump(int frame, int queue)
 		return;
 
 	pr_info("\n-------------- HMAC TX (frame = %d, queue = %d) regs (%p)-----------\n",
-		frame, queue, pp3_hmac_fr.base_addr + pp3_hmac_fr.ins_offs * frame);
+		frame, queue, pp3_hmac_fr.base_addr + mv_pp3_hmac_frame_offset(frame));
 	mv_pp3_hmac_fr_reg_print(frame, "QUEUE CONTROL", MV_HMAC_SEND_Q_CTRL_REG(queue));
 	mv_pp3_hmac_fr_reg_print(frame, "QUEUE NUMBER BPID", MV_HMAC_SEND_Q_NUM_BPID_REG(queue));
 	mv_pp3_hmac_fr_reg_print(frame, "QUEUE STATUS", MV_HMAC_SEND_Q_STATUS_REG(queue));

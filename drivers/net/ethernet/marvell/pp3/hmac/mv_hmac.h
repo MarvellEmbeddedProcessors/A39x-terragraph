@@ -102,6 +102,11 @@ static inline u32 mv_pp3_hmac_gl_reg_read(u32 reg)
 	return reg_data;
 }
 
+static inline u32 mv_pp3_hmac_frame_offset(int frame_id)
+{
+	return pp3_hmac_fr.ins_offs * frame_id;
+}
+
 static inline u32 mv_pp3_hmac_frame_reg_read(int frame_id, u32 reg)
 {
 	void __iomem *reg_addr;
@@ -110,7 +115,7 @@ static inline u32 mv_pp3_hmac_frame_reg_read(int frame_id, u32 reg)
 	if (mv_pp3_max_check(frame_id, MV_PP3_HFRM_NUM, "HMAC frame"))
 		return 0;
 
-	reg_addr = pp3_hmac_fr.base_addr + pp3_hmac_fr.ins_offs * frame_id + reg;
+	reg_addr = pp3_hmac_fr.base_addr + mv_pp3_hmac_frame_offset(frame_id) + reg;
 	reg_data = mv_pp3_hw_reg_read(reg_addr);
 
 	/* debug print */
@@ -135,7 +140,7 @@ static inline void mv_pp3_hmac_frame_reg_write(int frame_id, u32 reg, u32 data)
 	if (mv_pp3_max_check(frame_id, MV_PP3_HFRM_NUM, "HMAC frame"))
 		return;
 
-	reg_addr = pp3_hmac_fr.base_addr + pp3_hmac_fr.ins_offs * frame_id + reg;
+	reg_addr = pp3_hmac_fr.base_addr + mv_pp3_hmac_frame_offset(frame_id) + reg;
 	mv_pp3_hw_reg_write(reg_addr, data);
 	/* debug print */
 	if (mv_pp3_hmac_debug_flags & MV_PP3_HMAC_WRITE_DEBUG)
