@@ -79,7 +79,8 @@
 /* Default Drop thresholds per HWQ: */
 /* TD  = 20 packets 2K bytes each = 40 KBytes */
 /* RED = 10 packets 2K bytes each = 20 KBytes */
-#define MV_PP3_INGRESS_TD_DEF           (2 * 20) /* 40 KBytes */
+#define MV_PP3_INGRESS_TD_DEF_ETH       (2 * 20) /* 40 KBytes */
+#define MV_PP3_INGRESS_TD_DEF_NSS       (2 * 30) /* 60 KBytes */
 #define MV_PP3_INGRESS_RED_DEF          (2 * 10) /* 20 KBytes */
 
 /*---------------------------------------------------------------------------*/

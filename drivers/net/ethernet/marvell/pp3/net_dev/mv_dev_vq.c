@@ -345,7 +345,10 @@ int mv_pp3_dev_ingress_vqs_defaults_set(struct net_device *dev)
 			return -1;
 
 		/* Set default TD and RED thresholds */
-		drop.td = MV_PP3_INGRESS_TD_DEF;
+		if (MV_PP3_PRIV(dev)->vport->type == MV_PP3_NSS_PORT_ETH)
+			drop.td = MV_PP3_INGRESS_TD_DEF_ETH;
+		else
+			drop.td = MV_PP3_INGRESS_TD_DEF_NSS;
 		drop.red = MV_PP3_INGRESS_RED_DEF;
 		drop.enable = true;
 		if (mv_pp3_dev_ingress_vq_drop_set(dev, vq, &drop))
