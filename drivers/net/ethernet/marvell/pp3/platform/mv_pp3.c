@@ -95,6 +95,32 @@ static struct mv_nss_meter pp3_dev_nss_egress_rate_limit = {
 static u8   mv_pp3_dp_q_curve_id;
 static struct pp3_dp_ctrl mv_pp3_dp_q_ctrl[MV_TM_NUM_QUEUE_DROP_PROF];
 
+/* Reconfigure HMAC Port Color Blind Tail Drop */
+static inline int mv_pp3_hmac_port_cbtd_set(void)
+{
+	struct mv_tm_drop_profile profile;
+	int rc;
+	int prof_idx = 1;
+	int cos = -1; /*COS=TM_INVAL*/
+	int cbtd = MV_PP3_HMAC_PORT_TAIL_DROP_THR;
+
+	rc = mv_tm_drop_profile_get(P_LEVEL, prof_idx, cos, &profile);
+	if (rc)
+		goto end;
+
+	cbtd = MV_PP3_HMAC_PORT_TAIL_DROP_THR;
+	profile.cbtd_threshold = cbtd * (1024 / 16); /* KB/chunk16B */
+
+	rc = mv_tm_drop_profile_set(P_LEVEL, prof_idx, cos, &profile);
+	if (!rc)
+		rc = mv_tm_dp_set(P_LEVEL, TM_A0_PORT_HMAC, cos, prof_idx);
+end:
+	pr_info("TM hmac Port%s=%d tail-drop %ukB set %s (profile_%d, cos=%d)\n",
+		"A0", TM_A0_PORT_HMAC, cbtd,
+		(rc) ? "FAIL" : "OK", prof_idx, cos);
+	return rc;
+}
+
 /* Reconfigure Drop profile */
 static int mv_pp3_dp_q_set(int dp_id, u16 td, u16 red)
 {
@@ -801,6 +827,8 @@ int mv_pp3_shared_start(struct mv_pp3 *priv)
 
 #ifdef CONFIG_MV_PP3_TM_SUPPORT
 	if (tm_cfg1())
+		return -1;
+	if (mv_pp3_hmac_port_cbtd_set())
 		return -1;
 #endif /* CONFIG_MV_PP3_TM_SUPPORT */
 

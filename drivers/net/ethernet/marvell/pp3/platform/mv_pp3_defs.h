@@ -102,6 +102,7 @@
 #define MV_PP3_HMAC_LOW_THR		1
 #define MV_PP3_HMAC_HIGH_THR		3
 #define MV_PP3_HMAC_PAUSE_THR		(MV_PP3_HMAC_HIGH_THR * 2) /*not in use*/
+#define MV_PP3_HMAC_PORT_TAIL_DROP_THR	400 /* KB */
 
 /* QM internal back pressure thresholds in KB */
 #define MV_PP3_QM_BPI_XON		1
