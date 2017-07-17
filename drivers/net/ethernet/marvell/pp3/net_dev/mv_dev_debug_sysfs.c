@@ -32,6 +32,7 @@
 
 
 #define MV_HLP(STR) { o += scnprintf(b + o, PAGE_SIZE - o, STR); }
+#define MV_HL1(STR, PAR) { o += scnprintf(b + o, PAGE_SIZE - o, STR, PAR); }
 
 static ssize_t pp3_dev_debug_help(char *b)
 {
@@ -40,6 +41,9 @@ static ssize_t pp3_dev_debug_help(char *b)
 #ifdef CONFIG_MV_PP3_DEBUG_CODE
 MV_HLP("\n");
 MV_HLP("cat                       help           - show this help\n");
+MV_HLP("echo  0|1                 mv_log_enable  - Disable|Enable mv_log (on restart is enabled)\n");
+MV_HL1("cat                       mv_log         - save mv_log (mini-kmsg) to %s\n", mv_log_fname_dflt_get());
+MV_HLP("                                             AND print last 4kB traces\n");
 MV_HLP("echo [ifname]           > mac_show       - show MAC addresses for network interface\n");
 #if 0
 MV_HLP("echo [cpu]              > txdone_history - show tx done history staistics\n");
@@ -75,13 +79,20 @@ MV_HLP("      [ebs]       - excessive burst size in [KBytes]\n");
 static ssize_t pp3_dev_debug_show(struct device *dev,
 				  struct device_attribute *attr, char *buf)
 {
+	const char *name = attr->attr.name;
 	int off = 0;
 
 	if (!capable(CAP_NET_ADMIN))
 		return -EPERM;
 
-	off = pp3_dev_debug_help(buf);
-
+	if (!strcmp(name, "help")) {
+		off = pp3_dev_debug_help(buf);
+	} else if (!strcmp(name, "mv_log")) {
+		mv_log_save2file(NULL);
+		off = mv_log_cp2buf(buf, PAGE_SIZE);
+		if (off > 0)
+			off--; /* last char is nul-terminator */
+	}
 	return off;
 }
 
@@ -99,6 +110,11 @@ ssize_t pp3_dev_debug_dec_store(struct device *dev, struct device_attribute *att
 	/* Read port and value */
 	p = 0;
 	fields = sscanf(buf, "%d", &p);
+
+	if (!strcmp(name, "mv_log_enable")) {
+		mv_log_enable((bool)p);
+		return len;
+	}
 
 	local_irq_save(flags);
 
@@ -198,6 +214,8 @@ static ssize_t pp3_dev_debug_store(struct device *dev,
 }
 
 static DEVICE_ATTR(help,		S_IRUSR, pp3_dev_debug_show, NULL);
+static DEVICE_ATTR(mv_log,		S_IRUSR, pp3_dev_debug_show, NULL);
+static DEVICE_ATTR(mv_log_enable,	S_IWUSR, NULL, pp3_dev_debug_dec_store);
 static DEVICE_ATTR(internal_debug,	S_IWUSR, NULL, pp3_dev_debug_dec_store);
 static DEVICE_ATTR(debug,		S_IWUSR, NULL, pp3_dev_debug_store);
 static DEVICE_ATTR(mac_show,		S_IWUSR, NULL, pp3_dev_debug_store);
@@ -214,6 +232,8 @@ static DEVICE_ATTR(rx_isr_mode,		S_IWUSR, NULL, pp3_dev_debug_hex_store);
 
 static struct attribute *pp3_dev_debug_attrs[] = {
 	&dev_attr_help.attr,
+	&dev_attr_mv_log.attr,
+	&dev_attr_mv_log_enable.attr,
 	&dev_attr_debug.attr,
 	&dev_attr_mac_show.attr,
 	&dev_attr_tx_shaper.attr,

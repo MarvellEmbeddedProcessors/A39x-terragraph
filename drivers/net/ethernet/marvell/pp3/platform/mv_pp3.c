@@ -882,6 +882,8 @@ int mv_pp3_shared_start(struct mv_pp3 *priv)
 	mv_pp3_dev_type_rate_limit_set(MV_PP3_DEV_NSS0, &pp3_dev_nss0_egress_rate_limit);
 	mv_pp3_dev_type_rate_limit_set(MV_PP3_DEV_NSS, &pp3_dev_nss_egress_rate_limit);
 
+	mv_log_init(800);
+
 	return 0;
 }
 

@@ -10,20 +10,21 @@
 
 #if !defined(MV_DO_NOT_OVERLOAD_PRINTK)
 /* Overwrite/extend linux/printk.h::pr_XXX macros */
+#define MV_PREF	"MV "
 #undef pr_err
 #undef pr_warning
 #undef pr_warn
 #undef pr_notice
 #undef pr_info
 #define pr_err(fmt, ...) \
-	do { printk(KERN_ERR pr_fmt(fmt), ##__VA_ARGS__); mv_log_event(); } while (0)
+	do { printk(KERN_ERR MV_PREF pr_fmt(fmt), ##__VA_ARGS__); mv_log_event(); } while (0)
 #define pr_warning(fmt, ...) \
-	do { printk(KERN_WARNING pr_fmt(fmt), ##__VA_ARGS__); mv_log_event(); } while (0)
+	do { printk(KERN_WARNING MV_PREF pr_fmt(fmt), ##__VA_ARGS__); mv_log_event(); } while (0)
 #define pr_warn pr_warning
 #define pr_notice(fmt, ...) \
-	do { printk(KERN_NOTICE pr_fmt(fmt), ##__VA_ARGS__); mv_log_event(); } while (0)
+	do { printk(KERN_NOTICE MV_PREF pr_fmt(fmt), ##__VA_ARGS__); mv_log_event(); } while (0)
 #define pr_info(fmt, ...) \
-	do { printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__); mv_log_event(); } while (0)
+	do { printk(KERN_INFO MV_PREF pr_fmt(fmt), ##__VA_ARGS__); mv_log_event(); } while (0)
 #endif /* MV_DO_NOT_OVERLOAD_PRINTK */
 
 char *mv_log_buf_addr_get(void);

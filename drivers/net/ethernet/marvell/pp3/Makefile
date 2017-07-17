@@ -20,6 +20,9 @@ ccflags-y += -I$(PLAT_DIR)/pp3/tm/core/resource_management
 ccflags-y += -I$(PLAT_DIR)/pp3/tm/wrappers
 
 mv_pp3-objs := common/mv_stack.o common/mv_common.o
+ifeq ($(CONFIG_MV_PP3_DEBUG_CODE),y)
+mv_pp3-objs += common/mv_printk_log.o
+endif
 mv_pp3-objs += platform/mv_pp3.o platform/mv_pp3_config.o platform/mv_pp3_debug_sysfs.o platform/mv_pp3_init_sysfs.o
 mv_pp3-objs += vport/mv_pp3_vq.o vport/mv_pp3_swq.o vport/mv_pp3_pool.o vport/mv_pp3_vport.o vport/mv_pp3_cpu.o
 mv_pp3-objs += vport/mv_vport_sysfs.o

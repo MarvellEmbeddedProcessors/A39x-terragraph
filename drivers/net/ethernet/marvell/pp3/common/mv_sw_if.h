@@ -39,6 +39,8 @@ disclaimer.
 #include <linux/if_vlan.h>
 #include <linux/platform_device.h>
 
+#include "common/mv_printk.h"
+
 
 #define __ATTRIBUTE_PACKED__	__packed
 #define MV_MALLOC	kmalloc
