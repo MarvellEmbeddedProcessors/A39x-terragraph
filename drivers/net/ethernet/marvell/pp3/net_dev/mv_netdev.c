@@ -80,6 +80,7 @@ disclaimer.
 #include "mv_dev_sysfs.h"
 #include "mv_dev_vq.h"
 #include "mv_ethtool.h"
+#include "mv_dev_audit.h"
 
 #ifdef CONFIG_MV_PP3_FPGA
 #include "gmac/mv_gmac.h"
@@ -2464,6 +2465,8 @@ int mv_pp3_netdev_global_init(struct mv_pp3 *priv)
 
 	pp3_priv = priv;
 
+	mv_pp3_audit_init();
+
 	return 0;
 
 	kfree(pp3_netdev);
@@ -2978,6 +2981,7 @@ int mv_pp3_dev_open(struct net_device *dev)
 
 	set_bit(MV_PP3_F_IF_UP_BIT, &(dev_priv->flags));
 
+	mv_pp3_audit_open(dev);
 	return 0;
 err:
 	pr_err("%s open failed\n", dev->name);
@@ -2988,6 +2992,8 @@ int mv_pp3_dev_stop(struct net_device *dev)
 {
 	struct pp3_dev_priv *dev_priv = MV_PP3_PRIV(dev);
 	int emac;
+
+	mv_pp3_audit_stop(dev);
 
 	clear_bit(MV_PP3_F_IF_UP_BIT, &(dev_priv->flags));
 

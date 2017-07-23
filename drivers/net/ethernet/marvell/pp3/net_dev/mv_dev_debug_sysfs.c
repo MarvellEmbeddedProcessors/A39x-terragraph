@@ -28,6 +28,7 @@
 #include "mv_netdev_structs.h"
 #include "mv_dev_vq.h"
 #include "mv_dev_dbg.h"
+#include "mv_dev_audit.h"
 #include "common/mv_hw_if.h"
 
 
@@ -40,10 +41,16 @@ static ssize_t pp3_dev_debug_help(char *b)
 
 #ifdef CONFIG_MV_PP3_DEBUG_CODE
 MV_HLP("\n");
-MV_HLP("cat                       help           - show this help\n");
-MV_HLP("echo  0|1                 mv_log_enable  - Disable|Enable mv_log (on restart is enabled)\n");
-MV_HL1("cat                       mv_log         - save mv_log (mini-kmsg) to %s\n", mv_log_fname_dflt_get());
-MV_HLP("                                             AND print last 4kB traces\n");
+MV_HLP("cat  help                                - show this help\n");
+MV_HLP("echo  0|1     >  mv_log_enable           - Disable|Enable mv_log (on restart is enabled)\n");
+MV_HL1("                                            on Disable save buffer to %s\n", mv_log_fname_dflt_get());
+MV_HLP("cat              mv_log                  - print mv_log buffer to Console\n");
+/* HIDDEN     -1      >  audit_poll_period   - emulate all Audit's Warnings and Alarms */
+MV_HLP("echo <NN>     >  audit_poll_period       - set Audit polling period [10..120] sec\n");
+MV_HLP("echo <DEC>    >  audit_drop_thrsh        - Warning: drop > threshold. 10pkt/sec=Dflt, 0=disable\n");
+MV_HLP("cat              audit_show              - show audit accumulated reports\n");
+MV_HLP("cat              audit_nss               - only returns 0=OK or error on Alarm\n");
+MV_HLP("\n");
 MV_HLP("echo [ifname]           > mac_show       - show MAC addresses for network interface\n");
 #if 0
 MV_HLP("echo [cpu]              > txdone_history - show tx done history staistics\n");
@@ -75,6 +82,41 @@ MV_HLP("      [ebs]       - excessive burst size in [KBytes]\n");
 	return o;
 }
 
+static ssize_t mv_log_audit_show(int audit_only, char *buf)
+{
+	int off = 0, putlen = 0, len, len_alarm, put2begin;
+	char str[MV_PP3_AUDIT_STR_BUF_SZ];
+	char *p_buf;
+
+	if (!audit_only) { /* "mv_log" */
+		off = mv_log_cp2buf(buf, PAGE_SIZE);
+		if (off > 0)
+			off--; /* last char is nul-terminator */
+	}
+
+	/* If full => Put Audit to buf beginning, else after log-messages */
+	put2begin = (off > (PAGE_SIZE - 3 * MV_PP3_AUDIT_STR_BUF_SZ));
+	p_buf = (put2begin) ? buf : (buf + off);
+
+	len = mv_pp3_audit_warn_get(str, MV_PP3_AUDIT_STR_BUF_SZ);
+	if (len)
+		putlen += sprintf(p_buf + putlen, "\n%s\n", str);
+	len_alarm = mv_pp3_audit_alarm_get(str, MV_PP3_AUDIT_STR_BUF_SZ);
+	if (len_alarm)
+		putlen += sprintf(p_buf + putlen, "\n%s\n", str);
+
+	if (put2begin) {
+		/* replace Str Null Terminator if mv_log inside */
+		if (putlen && off)
+			buf[putlen] = '\n';
+	} else {
+		/* Text added, fix "off". Null Terminator already inside */
+		if (putlen)
+			off += putlen;
+	}
+	return off;
+}
+
 
 static ssize_t pp3_dev_debug_show(struct device *dev,
 				  struct device_attribute *attr, char *buf)
@@ -88,10 +130,16 @@ static ssize_t pp3_dev_debug_show(struct device *dev,
 	if (!strcmp(name, "help")) {
 		off = pp3_dev_debug_help(buf);
 	} else if (!strcmp(name, "mv_log")) {
-		off = mv_log_cp2buf(buf, PAGE_SIZE);
-		if (off > 0)
-			off--; /* last char is nul-terminator */
+		/* Put mv_log[], Audit warnings and alarms into output-buff */
+		off = mv_log_audit_show(0, buf);
+	} else if (!strncmp(name, "audit_show", 8)) {
+		/* Put Audit text into output-buffer, return Text-len */
+		off = mv_log_audit_show(1, buf);
+	} else if (!strcmp(name, "audit_nss")) {
+		/* Retun 0=OK or -EL2HLT=-51 "cat: audit_nss: Level 2 halted"  but $?=1 */
+		off = (mv_pp3_audit_alarm_get(NULL, 0)) ? -EL2HLT : 0;
 	}
+
 	return off;
 }
 
@@ -112,23 +160,36 @@ ssize_t pp3_dev_debug_dec_store(struct device *dev, struct device_attribute *att
 
 	if (!strcmp(name, "mv_log_enable")) {
 		mv_log_enable((bool)p);
-		return len;
+		err = 0;
+		goto end;
+	}
+	if (!strncmp(name, "audit_poll_period", 10)) {
+		if (p == -1) {
+			/* Hidden debug only option */
+			mv_pp3_audit_alarm_emulate();
+			err = 0;
+		} else {
+			err = mv_pp3_audit_poll_period_sec_set(p);
+		}
+		goto end;
+	}
+	if (!strncmp(name, "audit_drop_thrsh", 10)) {
+		err = mv_pp3_audit_drop_thrsh_set(p);
+		goto end;
 	}
 
 	local_irq_save(flags);
-
 #ifdef PP3_INTERNAL_DEBUG
 	if (!strcmp(name, "internal_debug")) {
 		if (fields == 1)
 			err = mv_pp3_ctrl_internal_debug_set(p);
 	}
 #endif
+	local_irq_restore(flags);
 
 	if (err)
 		pr_err("%s: operation <%s> FAILED. err = %d\n", __func__, name, err);
-
-	local_irq_restore(flags);
-
+end:
 	return err ? -EINVAL : len;
 }
 
@@ -214,7 +275,11 @@ static ssize_t pp3_dev_debug_store(struct device *dev,
 
 static DEVICE_ATTR(help,		S_IRUSR, pp3_dev_debug_show, NULL);
 static DEVICE_ATTR(mv_log,		S_IRUSR, pp3_dev_debug_show, NULL);
+static DEVICE_ATTR(audit_show,		S_IRUSR, pp3_dev_debug_show, NULL);
+static DEVICE_ATTR(audit_nss,		S_IRUSR, pp3_dev_debug_show, NULL);
 static DEVICE_ATTR(mv_log_enable,	S_IWUSR, NULL, pp3_dev_debug_dec_store);
+static DEVICE_ATTR(audit_poll_period,	S_IWUSR, NULL, pp3_dev_debug_dec_store);
+static DEVICE_ATTR(audit_drop_thrsh,	S_IWUSR, NULL, pp3_dev_debug_dec_store);
 static DEVICE_ATTR(internal_debug,	S_IWUSR, NULL, pp3_dev_debug_dec_store);
 static DEVICE_ATTR(debug,		S_IWUSR, NULL, pp3_dev_debug_store);
 static DEVICE_ATTR(mac_show,		S_IWUSR, NULL, pp3_dev_debug_store);
@@ -232,7 +297,11 @@ static DEVICE_ATTR(rx_isr_mode,		S_IWUSR, NULL, pp3_dev_debug_hex_store);
 static struct attribute *pp3_dev_debug_attrs[] = {
 	&dev_attr_help.attr,
 	&dev_attr_mv_log.attr,
+	&dev_attr_audit_show.attr,
+	&dev_attr_audit_nss.attr,
 	&dev_attr_mv_log_enable.attr,
+	&dev_attr_audit_poll_period.attr,
+	&dev_attr_audit_drop_thrsh.attr,
 	&dev_attr_debug.attr,
 	&dev_attr_mac_show.attr,
 	&dev_attr_tx_shaper.attr,

@@ -36,6 +36,7 @@ mv_pp3-objs += bm/mv_bm.o bm/mv_bm_sysfs.o
 mv_pp3-objs += qm/mv_qm.o qm/mv_qm_regs.o qm/mv_qm_sysfs.o
 mv_pp3-objs += cmac/mv_cmac.o cmac/mv_cmac_sysfs.o
 mv_pp3-objs += net_dev/mv_netdev.o net_dev/mv_dev_dbg.o net_dev/mv_dev_sysfs.o net_dev/mv_dev_debug_sysfs.o
+mv_pp3-objs += net_dev/mv_dev_audit.o
 mv_pp3-objs += net_dev/mv_dev_vq.o net_dev/mv_dev_vq_sysfs.o net_dev/mv_ethtool.o net_dev/mv_dev_init_sysfs.o
 mv_pp3-objs += gnss/mv_pp3_gnss_api.o gnss/mv_pp3_gnss_stats_api.o
 #mv_pp3-objs += net_dev/mv_dev_bpi_sysfs.o
