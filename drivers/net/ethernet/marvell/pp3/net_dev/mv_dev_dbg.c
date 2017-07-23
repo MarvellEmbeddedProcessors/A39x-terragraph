@@ -1450,6 +1450,7 @@ int pp3_dbg_cfh_rx_checker(struct pp3_dev_priv *dev_priv, u32 *ptr)
 	struct mv_cfh_common *cfh = (struct mv_cfh_common *) ptr;
 	struct pp3_vport *cpu_vp;
 	bool flag = false;
+	int err_cnt = 0;
 
 	cfh_len = MV_CFH_LEN_GET(cfh->ctrl);
 	bpid = MV_CFH_BPID_GET(cfh->vm_bp);
@@ -1462,32 +1463,37 @@ int pp3_dbg_cfh_rx_checker(struct pp3_dev_priv *dev_priv, u32 *ptr)
 	*/
 	if ((cfh_len != (MV_PP3_CFH_HDR_SIZE + MV_PP3_CFH_MDATA_SIZE)) && (cfh_len != MV_PP3_CFH_MAX_SIZE)) {
 		pr_err("%s: invalid cfh_length %d\n", __func__, cfh_len);
-		goto err;
+		err_cnt++;
+		goto non_len_check;
 	}
 
 	if ((pkt_len <= (cfh_len - MV_PP3_CFH_HDR_SIZE)) && (cfh->phys_l)) {
 		pr_err("%s: unneseccary BM buffer allocate by FW\n", __func__);
 		pr_err("%s: cfh_len = %d, pkt_len = %d phys_l = 0x%8x\n", __func__, cfh_len, pkt_len, cfh->phys_l);
-		goto err;
+		err_cnt++;
 	}
 
 	if ((pkt_len - MV_PP3_CFH_MDATA_SIZE) > MV_RX_PKT_SIZE(dev_priv->dev->mtu)) {
 		pr_err("%s: Invalid packet length %d, MTU = %d, max packet length = %d",
 				__func__, pkt_len, dev_priv->dev->mtu, MV_RX_PKT_SIZE(dev_priv->dev->mtu));
-		goto err;
+		err_cnt++;
 	}
 
 	if (cfh_len == MV_PP3_CFH_MAX_SIZE) {
 		pkt_len -= MV_PP3_CFH_MDATA_SIZE;
 		if (pkt_len >= MV_PP3_CFH_PAYLOAD_MAX_SIZE) {
 			pr_err("%s: Unexpected Split packet", __func__);
-			goto err;
+			err_cnt++;
 		}
 	}
 
+non_len_check:
 	cpu = smp_processor_id();
-	if (!dev_priv->cpu_vp[cpu])
+	if (!dev_priv->cpu_vp[cpu]) {
+		pr_err("%s: cpu_vp[%d] is NULL\n", __func__, cpu);
+		err_cnt++;
 		goto err;
+	}
 
 	cpu_vp = dev_priv->cpu_vp[cpu];
 	/* validate SWQ number */
@@ -1502,37 +1508,43 @@ int pp3_dbg_cfh_rx_checker(struct pp3_dev_priv *dev_priv, u32 *ptr)
 		}
 	}
 	if (!flag) {
-		pr_err("%s: invalid swq number %d\n", __func__, swq);
-		goto err;
+		pr_err("%s: invalid swq number %d (bits[12..4] in cfh->ctrl)\n", __func__, swq);
+		err_cnt++;
 	}
 
 	/* validate BM pool number and buffer pointers */
 	if (cfh->phys_l) {
 		struct sk_buff *skb = (struct sk_buff *)cfh->marker_l;
 
-		if (!skb) {
-			pr_err("%s: invalid marker_l\n", __func__);
-			goto err;
-		}
-
 		if ((dev_priv->cpu_shared->long_pool && (dev_priv->cpu_shared->long_pool->pool != bpid)) &&
 		   (dev_priv->cpu_shared->short_pool && (dev_priv->cpu_shared->short_pool->pool != bpid)) &&
 		   (dev_priv->cpu_shared->lro_pool && (dev_priv->cpu_shared->lro_pool->pool != bpid))) {
 			pr_err("%s: invalid bm pool %d\n", __func__, bpid);
-			goto err;
+			err_cnt++;
 		}
 
+		if (cfh->phys_l & 0x1f) { /* MIN alignment 5bits */
+			pr_err("%s: invalid phys_l = %x\n", __func__, cfh->phys_l);
+			err_cnt++;
+		}
+		if ((cfh->marker_l < 0x200) || (cfh->marker_l & 0x1f)) {
+			/* Wrong skb VA: NULL or reference over NULL or wrong aligned */
+			pr_err("%s: invalid skb in marker_l = %x\n", __func__, cfh->marker_l);
+			err_cnt++;
+			goto err;
+		}
 		if (virt_to_phys(skb->head) != cfh->phys_l) {
 			pr_err("%s: incorrect BM pointers\n", __func__);
-			pr_err("%s: virt_l: skb=%p, head=%p (0x%x), phys_l: 0x%0x\n",
+			pr_err("%s: virt_l: skb=%p->head=%p(pa=0x%x) != (phys_l 0x%0x)\n",
 				__func__, skb, skb->head, virt_to_phys(skb->head), cfh->phys_l);
-			goto err;
+			err_cnt++;
 		}
 	}
-	return 0;
 
+	if (!err_cnt)
+		return 0;
 err:
-	pr_err("%s: Error - invalid CFH found\n", dev_priv->dev->name);
+	pr_err("%s: Error - invalid CFH found (%d errors)\n", dev_priv->dev->name, err_cnt);
 	pp3_dbg_cfh_rx_dump(cfh);
 	return -1;
 }
