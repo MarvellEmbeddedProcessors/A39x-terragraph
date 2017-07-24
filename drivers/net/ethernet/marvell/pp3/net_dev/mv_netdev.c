@@ -104,6 +104,11 @@ static struct mv_nss_if_ops mv_pp3_nss_if_ops = {
 static enum mv_dbg_action internal_debug_action;
 static bool debug_stop_rx_tx;
 
+bool mv_get_debug_stop_status(void)
+{
+	return debug_stop_rx_tx;
+}
+
 const char *mv_pp3_get_internal_debug_str(void)
 {
 	switch (internal_debug_action) {
@@ -1661,6 +1666,7 @@ static int mv_pp3_rx(struct net_device *dev, struct pp3_vport *cpu_vp, struct pp
 		cfh = (struct mv_cfh_common *)mv_pp3_hmac_rxq_next_cfh(rx_swq->frame_num, rx_swq->swq, &num_dg);
 #ifdef PP3_INTERNAL_DEBUG
 		if (num_dg == 0) {
+			pr_err("%s: rx occ_dg is Zero\n", dev->name);
 			mv_pp3_internal_debug_action_on_err(dev);
 			break;
 		}
