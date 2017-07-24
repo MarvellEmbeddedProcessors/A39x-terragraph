@@ -27,7 +27,7 @@ static struct mv_pp3_version mv_pp3_driver_version = {
 	.name = "NSS",
 	.major_x = 16,
 	.minor_y = 8,
-	.local_z = 12,
+	.local_z = 13,
 	.debug_d = 0
 };
 
