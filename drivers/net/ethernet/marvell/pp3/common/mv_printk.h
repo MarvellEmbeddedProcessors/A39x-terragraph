@@ -1,12 +1,12 @@
 #ifndef __MV_KERNEL_PRINTK__
 #define __MV_KERNEL_PRINTK__
 
+#if defined(CONFIG_MV_PP3_DEBUG_CODE) && defined(MV_PRINTK_LOG)
+
 #ifndef __KERNEL_PRINTK__
 #include <linux/kernel.h>
 #include <linux/printk.h>
 #endif
-
-#ifdef CONFIG_MV_PP3_DEBUG_CODE
 
 #if !defined(MV_DO_NOT_OVERLOAD_PRINTK)
 /* Overwrite/extend linux/printk.h::pr_XXX macros */
@@ -44,7 +44,7 @@ static inline bool mv_log_enable(bool ena)	{ return false; }
 static inline void mv_log_event(void)	{ }
 static inline void mv_log_save2file(const char *file_ext)	{ }
 static inline int mv_log_cp2buf(char *buf, int limit) { return 0; }
-static inline void mv_log_init(void)	{ }
-#endif /* CONFIG_MV_PP3_DEBUG_CODE */
+static inline void mv_log_init(int delay_ms)	{ }
+#endif /* CONFIG_MV_PP3_DEBUG_CODE && MV_PRINTK_LOG */
 
 #endif /* __MV_KERNEL_PRINTK__ */
