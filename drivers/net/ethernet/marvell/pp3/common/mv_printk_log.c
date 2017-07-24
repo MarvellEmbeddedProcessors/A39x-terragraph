@@ -162,6 +162,9 @@ bool mv_log_enable(int delay_ms)
 	if (delay_ms < 0)
 		return old;
 
+	if (!delay_ms && mvlog.ena)
+		mv_log_save2file("on_stop.txt");
+
 	mvlog.ena = !!(delay_ms);
 	if (delay_ms > 10) {
 		/* Delay recording on startup since there are a lot of prints */
