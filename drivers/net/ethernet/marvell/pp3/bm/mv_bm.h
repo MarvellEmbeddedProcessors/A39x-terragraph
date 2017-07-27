@@ -282,6 +282,12 @@ void bm_pool_status_dump(int pool);
 int bm_bank0_pool_check(int pool, u32 *pool_base);
 
 int bm_pool_dump(int pool, int mode, u32 *pool_base, int capacity);
+
+/**
+ *  Get BM/GPM fill level. If ZERO the GPM is empty
+ */
+u32 bm_gpm_pool_fill_level_get(int pool);
+
 /*
  BM sysFS function
 */

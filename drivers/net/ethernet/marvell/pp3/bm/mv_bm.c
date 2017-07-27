@@ -1733,3 +1733,24 @@ int bm_bank0_pool_check(int pool, u32 *pool_base)
 	kfree(pool_shadow);
 	return 0;
 }
+
+u32 bm_gpm_pool_fill_level_get(int pool)
+{
+	/* Account BM/GPM free level: ZERO means BM/GPM pool is empty */
+	u32 cache_lines;
+	u32 dram_beats;
+	int bank;
+
+	if (pool >= 2) {
+		pr_info("BM pool #%d is wrong\n", pool);
+		return -1;
+	}
+	bank = 0; /* GPM cache is on bank0 */
+	bm_entry_read(BM_TPR_C_MNG_BANK_DYN_TBL_ENTRY(bank, pool), 1, &cache_lines);
+	cache_lines &= (1 << BM_TPR_C_MNG_BANK_DYN_CACHE_FILL_MIN_BITS) - 1; /* bits[9..0] */
+
+	bm_entry_read(BM_TPR_DRW_MNG_BALL_DYN_TBL_ENTRY(pool), 1, &dram_beats);
+	dram_beats &= (1 << BM_TPR_DRW_MNG_BALL_DYN_DRAM_FILL_BITS) - 1; /* bits[20..0] */
+
+	return (cache_lines * 4) + (dram_beats * 2);
+}
