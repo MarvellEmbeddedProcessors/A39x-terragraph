@@ -20,7 +20,7 @@ ccflags-y += -I$(PLAT_DIR)/pp3/tm/core/resource_management
 ccflags-y += -I$(PLAT_DIR)/pp3/tm/wrappers
 
 mv_pp3-objs := common/mv_stack.o common/mv_common.o
-ifeq ($(CONFIG_MV_PP3_DEBUG_CODE),y)
+ifeq ($(CONFIG_MV_PP3_LOG),y)
 ccflags-y += -DMV_PRINTK_LOG
 mv_pp3-objs += common/mv_printk_log.o
 endif

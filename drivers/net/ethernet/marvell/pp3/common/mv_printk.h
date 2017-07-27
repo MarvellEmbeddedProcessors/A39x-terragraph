@@ -1,7 +1,7 @@
 #ifndef __MV_KERNEL_PRINTK__
 #define __MV_KERNEL_PRINTK__
 
-#if defined(CONFIG_MV_PP3_DEBUG_CODE) && defined(MV_PRINTK_LOG)
+#if defined(CONFIG_MV_PP3_LOG) && defined(MV_PRINTK_LOG)
 
 #ifndef __KERNEL_PRINTK__
 #include <linux/kernel.h>
@@ -31,8 +31,9 @@ char *mv_log_buf_addr_get(void);
 u32 mv_log_buf_len_get(void);
 const char *mv_log_fname_dflt_get(void);
 bool mv_log_enable(int ena);
+bool mv_log_disable(char *extra_str1, char *extra_str2);
 void mv_log_event(void);
-void mv_log_save2file(char *file_ext);
+void mv_log_save2file(void);
 int mv_log_cp2buf(char *buf, int limit);
 void mv_log_init(int delay_ms);
 
@@ -41,8 +42,9 @@ static inline char *mv_log_buf_addr_get(void)	{ return NULL; }
 static inline u32 mv_log_buf_len_get(void)	{ return 0; }
 static inline const char *mv_log_fname_dflt_get(void)	{ return "none"; }
 static inline bool mv_log_enable(bool ena)	{ return false; }
+static inline bool mv_log_disable(char *extra_str1, char *extra_str2) { return false; }
 static inline void mv_log_event(void)	{ }
-static inline void mv_log_save2file(const char *file_ext)	{ }
+static inline void mv_log_save2file(void)	{ }
 static inline int mv_log_cp2buf(char *buf, int limit) { return 0; }
 static inline void mv_log_init(int delay_ms)	{ }
 #endif /* CONFIG_MV_PP3_DEBUG_CODE && MV_PRINTK_LOG */

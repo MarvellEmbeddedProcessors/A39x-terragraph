@@ -38,20 +38,25 @@
 
 /*PRINTK: #define __LOG_BUF_LEN (1 << CONFIG_LOG_BUF_SHIFT) */
 #define MV_LOG_SZ	(4 * 1024) /* ~30 lines of 120chars */
-#define MV_LOG_KMSG_SRC	"/var/log/messages"
-#define MV_LOG_DIRECTORY	"/data/"
-#define MV_LOG_FILE_PATH	MV_LOG_DIRECTORY  "mv_log"
-#define MV_LOG_FILE_DFLT	MV_LOG_FILE_PATH  ".txt"
+#define MV_LOG_KMSG_SRC1	"/var/log/kern.log"
+#define MV_LOG_KMSG_SRC2	"/var/log/messages"
+#define MV_LOG_KMSG_THRSH	100
+#define MV_LOG_DIRECTORY	"/data/mv_log"
+#define MV_LOG_FILE_DFLT	MV_LOG_DIRECTORY  "/mv_log.txt"
 #define NAME_MAX	255
 
 struct mvlog {
 	bool ena;
 	char *buf;
 	int sz;
+	char kmsg_src[28];
 
 	struct delayed_work *task;
 	struct workqueue_struct *wq;
 	unsigned long wq_delay;
+
+	bool save_on_stop;
+	int kmsg_src_thresh_cnt;
 };
 
 static struct mvlog mvlog;
@@ -63,30 +68,57 @@ static struct mvlog mvlog;
 
 static void mv_log_work_handler(struct work_struct *w);
 static DECLARE_DELAYED_WORK(mv_log_task, mv_log_work_handler);
+static void mv_log_save2file_utl(char *extra_str1, char *extra_str2);
 
 /* -----  Local utilities  -----------------------------------------------*/
-static inline void create_log_dir(void)
+static inline bool check_kmsg_src_found(void)
+{
+	struct file *filp;
+	int i;
+	char *path[2] = {MV_LOG_KMSG_SRC1, MV_LOG_KMSG_SRC2};
+
+	mvlog.kmsg_src[0] = 0;
+	for (i = 0; i < 2; i++) {
+		filp = filp_open(path[i], O_RDONLY, 0);
+		if (!IS_ERR(filp)) {
+			filp_close(filp, NULL);
+			strcpy(mvlog.kmsg_src, path[i]);
+			return true;
+		}
+	}
+	if (mvlog.kmsg_src_thresh_cnt++ >= MV_LOG_KMSG_THRSH) {
+		mv_log_enable(0);
+		pr_err("PP3 mv_log: fail to read kernel-log file\n");
+	}
+	return false;
+}
+
+static inline bool check_log_dir_file_log_found(void)
 {
 	struct file *filp;
 
-	filp = filp_open(MV_LOG_DIRECTORY, O_DIRECTORY | O_CREAT | O_WRONLY,
-			 S_IRWXU | S_IRWXG | S_IFDIR);
-	if (!IS_ERR(filp))
+	filp = filp_open(MV_LOG_DIRECTORY, O_RDONLY, 0);
+	if (!IS_ERR(filp)) {
 		filp_close(filp, NULL);
-}
+		mvlog.save_on_stop = true;
+	} else {
+		mvlog.save_on_stop = false;
+	}
 
-static inline void log_name_extension(char *buf)
-{
-/* Extend file-name with xxxx_date
- * { time_t rawtime; time(&rawtime); "_%s", ctime(&rawtime) }
- * or with enumerator xxxx_0, xxxx_1, xxxx_9
- */
+	if (mvlog.save_on_stop) {
+		filp = filp_open(MV_LOG_FILE_DFLT, O_RDONLY, 0);
+		if (!IS_ERR(filp)) {
+			filp_close(filp, NULL);
+			return true;
+		}
+	}
+	return false;
 }
 
 /* Log engine: save tail of "/var/log/messages" */
 static inline void mv_log_record(void)
 {
-	const char *path = MV_LOG_KMSG_SRC;
+	const char *path = mvlog.kmsg_src;
 	int sz = mvlog.sz - 1;
 	struct file *filp;
 	mm_segment_t oldfs;
@@ -97,14 +129,16 @@ static inline void mv_log_record(void)
 	if (!mvlog.ena)
 		return;
 
+	if (!path[0] && !check_kmsg_src_found())
+		return; /* No Kernel-log file found */
+
 	buf = mvlog.buf;
 	oldfs = get_fs();
 	set_fs(get_ds());
+
 	filp = filp_open(path, O_RDONLY, 0);
 	if (IS_ERR(filp)) {
 		set_fs(oldfs);
-		mv_log_enable(0);
-		pr_err("PP3 mv_log: fail to read <%s>\n", path);
 		return;
 	}
 
@@ -120,8 +154,16 @@ static inline void mv_log_record(void)
 	}
 	len = vfs_llseek(filp, offset, 0);
 	len = vfs_read(filp, buf, size, &offset);
-	if (len > 0)
-		buf[len] = 0;
+	if (len > 0) {
+		if (len < (sz - 6)) {
+			/* Small len/fileSize occurred on "message" swap to "message.1" */
+			/* Above "\n----\n" delimiter is NEW piece of log */
+			len += sprintf(buf + len, "\n----\n");
+			/* Below "\n----\n" delimiter is OLD piece of log */
+		} else {
+			buf[len] = 0;
+		}
+	}
 bail:
 	set_fs(oldfs);
 	filp_close(filp, NULL);
@@ -153,7 +195,7 @@ const char *mv_log_fname_dflt_get(void)
 }
 
 /* Enable/Disable log-recording. if -1 just returns Current */
-bool mv_log_enable(int delay_ms)
+static bool mv_log_enable_utl(int delay_ms, char *extra_str1, char *extra_str2)
 {
 	bool old = mvlog.ena;
 
@@ -163,7 +205,7 @@ bool mv_log_enable(int delay_ms)
 		return old;
 
 	if (!delay_ms && mvlog.ena)
-		mv_log_save2file("on_stop.txt");
+		mv_log_save2file_utl(extra_str1, extra_str2);
 
 	mvlog.ena = !!(delay_ms);
 	if (delay_ms > 10) {
@@ -172,6 +214,17 @@ bool mv_log_enable(int delay_ms)
 	}
 	return old;
 }
+
+bool mv_log_enable(int delay_ms)
+{
+	return mv_log_enable_utl(delay_ms, NULL, NULL);
+}
+
+bool mv_log_disable(char *extra_str1, char *extra_str2)
+{
+	return mv_log_enable_utl(0, extra_str1, extra_str2);
+}
+
 
 /* An event triggering save to log buffer.
  * Safety to be called on IRQ context!
@@ -184,38 +237,48 @@ void mv_log_event(void)
 }
 
 /* Save buffer into file */
-void mv_log_save2file(char *file_ext)
+static void mv_log_save2file_utl(char *extra_str1, char *extra_str2)
 {
 	int sz = mvlog.sz, size;
 	struct file *filp;
 	mm_segment_t oldfs;
 	loff_t offset;
 	char *buf;
-	char path[NAME_MAX];
-	char *ext;
 
 	if (!mvlog.buf) /* save even if disabled */
 		return;
-
-	ext = (file_ext) ? file_ext : "txt";
-	snprintf(path, NAME_MAX, "%s.%s", MV_LOG_FILE_PATH, ext);
-	path[NAME_MAX - 1] = 0;
-	log_name_extension(path);
+	if (!mvlog.save_on_stop)
+		return;
 
 	buf = mvlog.buf;
 	size = strnlen(buf, sz);
 
 	oldfs = get_fs();
 	set_fs(get_ds());
-	filp = filp_open(path, O_WRONLY | O_CREAT, 0644);
+	filp = filp_open(MV_LOG_FILE_DFLT, O_WRONLY | O_CREAT, 0644);
 	if (IS_ERR(filp)) {
 		set_fs(oldfs);
 		return;
 	}
 	offset = 0;
 	sz = vfs_write(filp, buf, size, &offset);
+	if (extra_str1) {
+		size = strnlen(extra_str1, sz);
+		if (size)
+			sz = vfs_write(filp, extra_str1, size, &offset);
+	}
+	if (extra_str2) {
+		size = strnlen(extra_str2, sz);
+		if (size)
+			sz = vfs_write(filp, extra_str2, size, &offset);
+	}
 	set_fs(oldfs);
 	filp_close(filp, NULL);
+}
+
+void mv_log_save2file(void)
+{
+	mv_log_save2file_utl(NULL, NULL);
 }
 
 /* Copy "limit" of chars into giben buffer */
@@ -245,10 +308,13 @@ int mv_log_cp2buf(char *buf, int limit)
 /* INIT */
 void mv_log_init(int delay_ms)
 {
+	bool old_log_found;
+	char str[120];
+
 	if (mvlog.ena)
 		return; /* already done */
 
-	create_log_dir();
+	old_log_found = check_log_dir_file_log_found();
 	mvlog.buf = kzalloc(MV_LOG_SZ, GFP_KERNEL);
 	if (!mvlog.buf) {
 		pr_err("PP3 mv_log: no memory\n");
@@ -263,7 +329,11 @@ void mv_log_init(int delay_ms)
 		return;
 	}
 	mvlog.sz = MV_LOG_SZ;
-	pr_info("PP3 mv_log initialized\n");
+	if (old_log_found)
+		sprintf(str, "(old log %s found)", MV_LOG_FILE_DFLT);
+	else
+		str[0] = 0;
+	pr_info("PP3 mv_log initialized %s\n", str);
 	if (!delay_ms)
 		delay_ms = 1;
 	mv_log_enable(delay_ms);

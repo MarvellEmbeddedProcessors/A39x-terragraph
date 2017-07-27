@@ -88,7 +88,6 @@ static ssize_t pp3_dev_debug_show(struct device *dev,
 	if (!strcmp(name, "help")) {
 		off = pp3_dev_debug_help(buf);
 	} else if (!strcmp(name, "mv_log")) {
-		mv_log_save2file(NULL);
 		off = mv_log_cp2buf(buf, PAGE_SIZE);
 		if (off > 0)
 			off--; /* last char is nul-terminator */

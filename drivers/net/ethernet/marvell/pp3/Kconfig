@@ -118,6 +118,18 @@ config  MV_PP3_DEBUG_CODE
 	Used for Debug mode and can cause performance decrease.
 	Minory increase kernal image size.
 
+config MV_PP3_LOG
+	bool "Marveel reduced KMSG logger"
+	depends on MV_PP3_DEBUG_CODE
+	default n
+	---help---
+	The logger changes behavior of pr_err/pr_warn/pr_info for MV-PP3 module:
+	- on MV-PP3 print the logger copy-save last 4kB of KMSG-log into mv-log-buffer
+	- adds preffix "MV " for every print
+	Does not impact GNSS modules compiled outside of MV-PP3
+	On system with huge amount of prints from non marvell subsystems
+	the MV-LOG permits to see the last MV-PP3 print/behavior and its predecessors
+
 config  MV_PP3_STAT_ERR
 	bool "Collect error statistics"
 	default y
