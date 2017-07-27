@@ -838,15 +838,28 @@ static void mv_pp3_sram_ppn_status_get(int ppc, u32 *buffer)
 	mv_pp3_hw_read(shared_sram_addr, (MV_NUM_OF_PPN / 4), buffer);
 }
 
-bool mv_fw_keep_alive_get(int ppc)
+bool mv_fw_keep_alive_get_str2buf(int ppc, char *str_buf, int str_len)
 {
-	int i;
 	u32 deq_status;
 	u8  sram_status[MV_NUM_OF_PPN];
+	int i, len = 80;
+	char buf[len];
+	char *pbuf;
+	bool print_here;
+
+	print_here = !str_buf;
+	if (print_here) {
+		pbuf = buf;
+		/* len = len */
+	} else {
+		pbuf = str_buf;
+		len = str_len;
+	}
+	len--;
 
 	if ((ppc < 0) || (ppc >= active_ppc_num)) {
-		pr_err("%s: Unexpected ppc number %d\n", __func__, ppc);
-		return false;
+		snprintf(pbuf, len, "fw-keepalive: Unexpected ppc number %d\n", ppc);
+		goto bad;
 	}
 
 	if (ppc_ppn_mask[ppc] <= 2) /* don't check fw debug versions with 1-2 PPNs only */
@@ -866,8 +879,8 @@ bool mv_fw_keep_alive_get(int ppc)
 			mv_pp3_sram_ppn_status_get(ppc, (u32 *)sram_status);
 
 			if (((deq_status & (1 << i)) == 0)  && (sram_status[i] != 0)) {
-				pr_info("keep alive: ppc=%d ppn=%d  failed\n", ppc, i);
-				return false; /* BAD */
+				snprintf(pbuf, len, "fw-keepalive: ppc=%d ppn=%d  failed\n", ppc, i);
+				goto bad;
 			}
 		}
 	}
@@ -875,5 +888,14 @@ bool mv_fw_keep_alive_get(int ppc)
 	mv_pp3_sram_ppn_status_set(ppc, 0x1); /* all 16 */
 
 	return true; /* GOOD */
+bad:
+	pbuf[len] = 0;
+	if (print_here && (str_len != 1))
+		pr_err("%s", pbuf);
+	return false;
 }
 
+bool mv_fw_keep_alive_get(int ppc)
+{
+	return mv_fw_keep_alive_get_str2buf(ppc, NULL, 0);
+}

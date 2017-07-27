@@ -104,6 +104,7 @@ int mv_fw_inf_logger_dump(int ppc, u32 ppn_numb, u32 start_lg_entry, int size);
 int mv_fw_critical_logger_dump(int ppc, u32 ppn_numb, u32 start_lg_entry, int size);
 void mv_fw_keep_alive_dump(int ppc);
 bool mv_fw_keep_alive_get(int ppc);
+bool mv_fw_keep_alive_get_str2buf(int ppc, char *str_buf, int str_len);
 
 int mv_pp3_fw_ppc_num_set(int ppc_num);
 int mv_pp3_fw_ppc_num_get(void);
