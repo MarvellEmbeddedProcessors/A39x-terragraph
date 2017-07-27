@@ -508,6 +508,14 @@ static inline void mv_pp3_hmac_group_event_mask(int frame, int event_group)
 	mv_pp3_hmac_gl_reg_write(MV_HMAC_EVENT_MASK_REG(frame), reg_val);
 }
 
+static inline bool mv_pp3_hmac_group_event_is_mask(int frame, int event_group)
+{
+	u32 reg_val;
+
+	reg_val = mv_pp3_hmac_gl_reg_read(MV_HMAC_EVENT_MASK_REG(frame));
+	return (bool)(reg_val & (1 << event_group));
+}
+
 /* configure queue parameters used by BM queue       */
 void mv_pp3_hmac_queue_bm_mode_cfg(int frame, int queue);
 /* configure queue parameters used by QM queue

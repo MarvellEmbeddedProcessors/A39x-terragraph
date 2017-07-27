@@ -927,6 +927,14 @@ static void mv_pp3_dev_rx_irqs_free(struct pp3_dev_priv *dev_priv)
 	}
 }
 
+bool mv_pp3_vp_rx_int_is_masked(struct pp3_vport *cpu_vp)
+{
+	int irq_num = cpu_vp->port.cpu.irq_num - mv_pp3_irq_rx_base;
+	int frame = MV_PP3_SW_IRQ_2_HFRAME(irq_num);
+	int irq_group = MV_PP3_SW_IRQ_2_GROUP(irq_num);
+
+	return mv_pp3_hmac_group_event_is_mask(frame, irq_group);
+}
 
 /*---------------------------------------------------------------------------*/
 /*  free net_device RX and link IRQs					     */

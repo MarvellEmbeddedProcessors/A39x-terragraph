@@ -59,6 +59,7 @@ int mv_pp3_ctrl_internal_debug_set(int action);
 const char *mv_pp3_get_internal_debug_str(void);
 bool mv_get_debug_stop_status(void);
 #endif
+bool mv_pp3_vp_rx_int_is_masked(struct pp3_vport *cpu_vp);
 
 #define TOS_TO_DSCP(tos)	((tos) >> 2)
 
