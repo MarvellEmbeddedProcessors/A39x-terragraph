@@ -103,9 +103,20 @@ static struct mv_nss_if_ops mv_pp3_nss_if_ops = {
 /* debug parameters */
 #ifdef PP3_INTERNAL_DEBUG
 static enum mv_dbg_action internal_debug_action;
-static bool debug_stop_rx_tx;
 
-bool mv_get_debug_stop_status(void)
+enum mv_stop_reason {
+	MV_STOP_NONE = 0,
+	MV_STOP_TX_IN_TIMER,
+	MV_STOP_TX_IN_XMIT,
+	MV_STOP_RX_BAD_DG,
+	MV_STOP_RX_DG_ZERO,
+	MV_STOP_RX_PARTIAL_CFH,
+	MV_STOP_RX_BAD_CFH,
+};
+
+static int debug_stop_rx_tx;
+
+int mv_get_debug_stop_status(void)
 {
 	return debug_stop_rx_tx;
 }
@@ -133,17 +144,17 @@ int mv_pp3_ctrl_internal_debug_set(int action)
 	return 0;
 }
 
-static int mv_pp3_internal_debug_action_on_err(struct net_device *dev)
+static int mv_pp3_internal_debug_action_on_err(struct net_device *dev, enum mv_stop_reason reason)
 {
 	/* Error detail is already printed */
 	if (internal_debug_action == MV_DBG_ACTION_STOP) {
-		debug_stop_rx_tx = true;
+		debug_stop_rx_tx = reason;
 		/* Memory barrier to unsure debug_stop_rx_tx is visible to all CPUs */
 		wmb();
 		pr_err("%s: unrecoverable problem. Net-device <%s> STOPPED!!!\n",
 		       dev->name, dev->name);
 	} else if (internal_debug_action == MV_DBG_ACTION_PANIC) {
-		debug_stop_rx_tx = true;
+		debug_stop_rx_tx = reason;
 		/* Memory barrier to unsure debug_stop_rx_tx is visible to all CPUs */
 		wmb();
 		/* PANIC rather then Oops/BUG */
@@ -830,7 +841,7 @@ static void mv_pp3_txdone_timer_callback(unsigned long data)
 			pr_err("%s: (cpu = %d) TX_DONE in Timer failed to release %d buffers\n",
 			       dev->name, cpu, txdone_todo);
 #ifdef PP3_INTERNAL_DEBUG
-			mv_pp3_internal_debug_action_on_err(dev);
+			mv_pp3_internal_debug_action_on_err(dev, MV_STOP_TX_IN_TIMER);
 			MV_LIGHT_UNLOCK(flags);
 			return;
 #endif
@@ -1649,7 +1660,7 @@ static int mv_pp3_rx(struct net_device *dev, struct pp3_vport *cpu_vp, struct pp
 	if (occ_dg > rx_swq->cur_size * MV_PP3_CFH_DG_MAX_NUM) {
 		pr_err("%s: bad occupied datagram counter %d received on frame %d, queue %d\n",
 		       dev->name, occ_dg, rx_swq->frame_num, rx_swq->swq);
-		mv_pp3_internal_debug_action_on_err(dev);
+		mv_pp3_internal_debug_action_on_err(dev, MV_STOP_RX_BAD_DG);
 		return 0;
 	}
 #endif
@@ -1676,7 +1687,7 @@ static int mv_pp3_rx(struct net_device *dev, struct pp3_vport *cpu_vp, struct pp
 #ifdef PP3_INTERNAL_DEBUG
 		if (num_dg == 0) {
 			pr_err("%s: rx occ_dg is Zero\n", dev->name);
-			mv_pp3_internal_debug_action_on_err(dev);
+			mv_pp3_internal_debug_action_on_err(dev, MV_STOP_RX_DG_ZERO);
 			break;
 		}
 
@@ -1686,7 +1697,7 @@ static int mv_pp3_rx(struct net_device *dev, struct pp3_vport *cpu_vp, struct pp
 			/* in next interrupt will processed full CFH */
 			pr_info("%s: only part of CFH is moved to DRAM (num_dg = %d, occ_dg = %d)\n",
 				dev->name, num_dg, occ_dg);
-			mv_pp3_internal_debug_action_on_err(dev);
+			mv_pp3_internal_debug_action_on_err(dev, MV_STOP_RX_PARTIAL_CFH);
 			break;
 		}
 #endif
@@ -1713,7 +1724,7 @@ static int mv_pp3_rx(struct net_device *dev, struct pp3_vport *cpu_vp, struct pp
 			/* BUG situation: can't handle bad packet,
 			 *  queue/buffer/skb are never released
 			 */
-			mv_pp3_internal_debug_action_on_err(dev);
+			mv_pp3_internal_debug_action_on_err(dev, MV_STOP_RX_BAD_CFH);
 			break;
 		}
 #endif
@@ -3395,7 +3406,7 @@ static int mv_pp3_tx(struct sk_buff *skb, struct net_device *dev)
 				       dev->name, cpu, dev_priv->tx_done_pkt_coal);
 
 #ifdef PP3_INTERNAL_DEBUG
-				mv_pp3_internal_debug_action_on_err(dev);
+				mv_pp3_internal_debug_action_on_err(dev, MV_STOP_TX_IN_XMIT);
 #endif
 			} else {
 			/*	pr_info("%s: TXDONE from TX: txdone_todo = %d, total_free = %d\n",

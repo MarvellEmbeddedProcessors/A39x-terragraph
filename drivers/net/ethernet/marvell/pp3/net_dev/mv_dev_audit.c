@@ -90,6 +90,7 @@ struct mv_audit {
 	char warn_str[MV_PP3_AUDIT_STR_BUF_SZ];
 	u32 warn_expire_ts;
 	u32 rx_netif_drop_thrsh;
+	int sw_stop_reason;
 };
 
 static struct mv_audit *aud;
@@ -168,12 +169,16 @@ void mv_pp3_audit_alarm_emulate(void)
 /*-----------------------------------------------------------------*/
 static inline void mv_audit_bld_alarm_str(struct mv_audit *ad, struct mv_per_dev *info)
 {
-	char *al_str0;
+	char al_str0[24];
 	char *al_str1;
 	char al_str2[60];
 	char *al_str4;
 
-	al_str0 = (ad->alarm & MV_AUDIT_EV_SW_STOP) ? "{sw-rx/tx}" : "";
+	if (ad->alarm & MV_AUDIT_EV_SW_STOP)
+		sprintf(al_str0, "{sw-rx/tx %d}", ad->sw_stop_reason);
+	else
+		al_str0[0] = 0;
+
 	al_str1 = (ad->alarm & MV_AUDIT_EV_FW_STOP) ? "{fw-ppc}" : "";
 	al_str4 = (ad->alarm & MV_AUDIT_EV_BM_GPM_FULL) ? "{bm-gpm-full}" : "";
 
@@ -382,14 +387,17 @@ static void mv_audit_check(void)
 	/* This is Global function to be called by Audit-polling,
 	 * or by Sysfs debug command (so no Input-Parameters)
 	 */
-	int cpu, ppc;
+	int cpu, ppc, sw_stop;
 
 	if (aud->alarm)
 		goto report;
 
 	/* MV_AUDIT_EV_SW_STOP */
-	if (mv_get_debug_stop_status())
+	sw_stop = mv_get_debug_stop_status();
+	if (sw_stop) {
+		aud->sw_stop_reason = sw_stop;
 		mv_audit_alarm(MV_AUDIT_EV_SW_STOP, -1);
+	}
 
 	/* MV_AUDIT_EV_FW_STOP */
 	for (ppc = 0; ppc < MV_PP3_PPC_MAX_NUM; ppc++) {

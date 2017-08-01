@@ -57,9 +57,9 @@ enum mv_dbg_action {
 void mv_pp3_internal_debug_init(void);
 int mv_pp3_ctrl_internal_debug_set(int action);
 const char *mv_pp3_get_internal_debug_str(void);
-bool mv_get_debug_stop_status(void);
+int mv_get_debug_stop_status(void);
 #else
-static inline bool mv_get_debug_stop_status(void) { return false; }
+static inline int mv_get_debug_stop_status(void) { return false; }
 #endif
 bool mv_pp3_vp_rx_int_is_masked(struct pp3_vport *cpu_vp);
 
