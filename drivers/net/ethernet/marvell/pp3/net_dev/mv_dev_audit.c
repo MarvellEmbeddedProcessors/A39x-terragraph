@@ -183,8 +183,13 @@ static inline void mv_audit_bld_alarm_str(struct mv_audit *ad, struct mv_per_dev
 	al_str4 = (ad->alarm & MV_AUDIT_EV_BM_GPM_FULL) ? "{bm-gpm-full}" : "";
 
 	if ((ad->alarm & MV_AUDIT_EV_DEV_RX_SWQ_OVERLOAD) && info)
+#if (CONFIG_MV_PP3_TXQ_NUM > 1)
 		sprintf(al_str2, "{%s occ_dg=%d:%d irq=%s}", info->dev->name,
 			info->occ_dg[0], info->occ_dg[1], (info->irq_dis) ? "DIS" : "ENA");
+#else
+		sprintf(al_str2, "{%s occ_dg=%d irq=%s}", info->dev->name,
+			info->occ_dg[0], (info->irq_dis) ? "DIS" : "ENA");
+#endif
 	else
 		al_str2[0] = 0;
 
