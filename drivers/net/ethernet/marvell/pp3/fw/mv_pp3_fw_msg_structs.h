@@ -146,14 +146,17 @@ struct mv_pp3_fw_vport_mac {
 	unsigned char  mac[MV_MAC_ADDR_SIZE];
 };
 
-#define MV_PP3_MAC_ADDR_NUM	6
+/* Set/Get list of MAC addresses for EMAC virtual port
+ *    MV_FW_VPORT_MAC_LIST_SET / MV_FW_VPORT_MAC_LIST_GET
+ * The full FW message is passed over CFH-buffer with max size 128 bytes.
+ * Headers inside are: MV_PP3_CFH_HDR_SIZE+MV_CFH_FW_MSG_HEADER_BYTES=32+8.
+ * So max-possible sizeof(mv_pp3_fw_vport_mac_list) = 128 - (32+8) = 88bytes
+ * with max-max MV_PP3_MAC_ADDR_NUM=14.
+ * (MV_PP3_MAC_ADDR_NUM * MV_MAC_ADDR_SIZE + 2+1+1 = 14*6 + 4 = 88bytes)
+ * But the MAC_LIST_GET cannot handle more than MV_PP3_MAC_ADDR_NUM=10
+ */
+#define MV_PP3_MAC_ADDR_NUM	10
 
-/* Set/Get list of MAC addresses for EMAC virtual port. */
-/* MV_FW_VPORT_MAC_LIST_SET / MV_FW_VPORT_MAC_LIST_GET  */
-/* MV_PP3_MAC_ADDR_NUM = 4 -> message size = 28 bytes */
-/* MV_PP3_MAC_ADDR_NUM = 6 -> message size = 40 bytes */
-/* MV_PP3_MAC_ADDR_NUM = 8 -> message size = 52 bytes */
-/* MV_PP3_MAC_ADDR_NUM = 14 -> message size = 88 bytes */
 struct mv_pp3_fw_vport_mac_list {
 	unsigned short vport;
 	unsigned char  mac_addr_list_size;  /* number of valid MAC addresses (MCAST and UCAST) in the mac_addr_list */

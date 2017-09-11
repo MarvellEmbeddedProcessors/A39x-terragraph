@@ -2090,14 +2090,14 @@ static int mv_pp3_proc_mac_mc(struct net_device *dev)
 
 	macs_list_size = netdev_hw_addr_list_count(&dev->mc);
 
-	/* FW supports (MV_PP3_MAC_ADDR_NUM-1) multicasts (-1 for Unicast).
+	/* FW supports MV_PP3_MAC_ADDR_NUM multicasts
 	 * Linux-net creates mcast-list without size-limit and doesn't check result.
-	 * Linux-net requires up to 3 places: +2 "common" and +1 local-ipv6-addr.
+	 * Linux-net requires up to 4 places: +3 "common" and +1 local-ipv6-addr.
 	 * An ordering inside of list may be changed by Linux-net,
 	 * so always go ahead with new list, even it is too long (just cut it).
 	 */
-	if (macs_list_size >= MV_PP3_MAC_ADDR_NUM) {
-		mc_list_size = MV_PP3_MAC_ADDR_NUM - 1;
+	if (macs_list_size > MV_PP3_MAC_ADDR_NUM) {
+		mc_list_size = MV_PP3_MAC_ADDR_NUM;
 		pr_err("%s: Warning: support up to %d mcast addresses. Please delete %d addresses\n",
 		       dev->name, mc_list_size, macs_list_size - mc_list_size);
 	} else {
