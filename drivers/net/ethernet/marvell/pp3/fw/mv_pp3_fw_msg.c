@@ -327,17 +327,22 @@ int pp3_fw_emac_vport_msg_show(int vport)
 {
 	int err = -1;
 	struct mv_pp3_fw_emac_vport out_msg;
+	char *l2_bcast, *l2_allmulti, *l2_promisc;
 
 	if (pp3_vports[vport]) {
 		pr_info("---- EMAC virtual port #%d information from Firmware ----\n", vport);
 		err = pp3_fw_emac_vport_msg_get(vport, &out_msg);
 	}
 	if (!err) {
+		l2_bcast = (BIT(MV_NSS_L2_BCAST_ADM)) ? "BCAST" : "";
+		l2_allmulti = (BIT(MV_NSS_L2_MCAST_PROMISC)) ? "ALLMULTI" : "";
+		l2_promisc = (BIT(MV_NSS_L2_UCAST_PROMISC)) ? "PROMISC" : "";
 		pr_info("state       : %s\n", out_msg.state ? "Enable" : "Disable");
 		pr_info("mtu         : %u\n", out_msg.mtu);
 		pr_info("def_dst_vp  : %u\n", out_msg.vport_dst);
 		pr_info("cos         : %u\n", out_msg.cos);
-		pr_info("L2 options  : 0x%02x\n", out_msg.l2_options);
+		pr_info("L2 options  : 0x%02x = (%s %s %s)\n",
+			out_msg.l2_options, l2_bcast, l2_allmulti, l2_promisc);
 		mv_mac_addr_print("ucast MAC   :", &out_msg.mac_addr[0], NULL);
 	} else
 		pr_err("vport #%d FW information is unavailable. err = %d\n", vport, err);

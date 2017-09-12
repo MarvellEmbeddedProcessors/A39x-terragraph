@@ -2090,16 +2090,28 @@ static int mv_pp3_proc_mac_mc(struct net_device *dev)
 
 	macs_list_size = netdev_hw_addr_list_count(&dev->mc);
 
+/*	if (1) {
+ *		int i = 0;
+ *		netdev_for_each_mc_addr(ha, dev) {
+ *			pr_info("   %c[%2d] %02x:%02x:%02x:%02x:%02x:%02x\n",
+ *				(i >= MV_PP3_MAC_ADDR_NUM) ? '-' : ' ', i,
+ *				ha->addr[0], ha->addr[1], ha->addr[2],
+ *				ha->addr[3], ha->addr[4], ha->addr[5]);
+ *			i++;
+ *		}
+ *	}
+*/
 	/* FW supports MV_PP3_MAC_ADDR_NUM multicasts
 	 * Linux-net creates mcast-list without size-limit and doesn't check result.
 	 * Linux-net requires up to 4 places: +3 "common" and +1 local-ipv6-addr.
-	 * An ordering inside of list may be changed by Linux-net,
-	 * so always go ahead with new list, even it is too long (just cut it).
+	 * If max exceeded, do not update FW-list but return +1
+	 * so the ALLMULTI filtering will be set by caller mv_pp3_set_rx_mode().
 	 */
 	if (macs_list_size > MV_PP3_MAC_ADDR_NUM) {
 		mc_list_size = MV_PP3_MAC_ADDR_NUM;
-		pr_err("%s: Warning: support up to %d mcast addresses. Please delete %d addresses\n",
-		       dev->name, mc_list_size, macs_list_size - mc_list_size);
+		pr_err("%s: mac_mc(%d) > max(%d), force allmulti\n",
+		       dev->name, macs_list_size, MV_PP3_MAC_ADDR_NUM);
+		return 1;
 	} else {
 		mc_list_size = macs_list_size;
 	}
@@ -2113,11 +2125,6 @@ static int mv_pp3_proc_mac_mc(struct net_device *dev)
 
 	netdev_for_each_mc_addr(ha, dev) {
 		memcpy(&macs_list[offset], ha->addr, MV_MAC_ADDR_SIZE);
-/*
-		pr_info("%02x:%02x:%02x:%02x:%02x:%02x\n",
-			macs_list[offset + 0], macs_list[offset + 1], macs_list[offset + 2],
-			macs_list[offset + 3], macs_list[offset + 4], macs_list[offset + 5]);
-*/
 		offset += MV_MAC_ADDR_SIZE;
 	}
 
@@ -2135,8 +2142,10 @@ static int mv_pp3_proc_mac_mc(struct net_device *dev)
 void mv_pp3_set_rx_mode(struct net_device *dev)
 {
 	struct pp3_dev_priv *dev_priv = MV_PP3_PRIV(dev);
+	int vport, ret = 0;
 	unsigned char l2_ops;
-	int vport;
+	const unsigned char l2_ops_mask = (unsigned char)(BIT(MV_NSS_L2_UCAST_PROMISC) |
+		BIT(MV_NSS_L2_MCAST_PROMISC) | BIT(MV_NSS_L2_BCAST_ADM));
 
 	if (!mv_pp3_shared_initialized(pp3_priv))
 		return;
@@ -2156,21 +2165,30 @@ void mv_pp3_set_rx_mode(struct net_device *dev)
 			l2_ops = MV_NSS_NON_PROMISC_MODE;
 			/* Accept initialized Multicast */
 			if (!netdev_mc_empty(dev))
-				if (mv_pp3_proc_mac_mc(dev) < 0) {
-					pr_err("%s: failed to set multicast list\n", dev->name);
-					return;
-				}
+				ret = mv_pp3_proc_mac_mc(dev);
+
+			if (ret < 0) {
+				pr_err("%s: failed to set multicast list\n", dev->name);
+				return;
+			}
+			if (ret > 0) {
+				/* Self-force all multicast */
+				l2_ops = MV_NSS_ALL_MCAST_MODE;
+			}
 		}
 	}
 	vport = dev_priv->vport->vport;
+
+	if ((dev_priv->vport->port.emac.l2_options & l2_ops_mask) == l2_ops)
+		return; /* Already in FW, no update required */
+
 	/* set/clear relevant bits in fw l2 ops bitmap */
 	pp3_fw_port_l2_filter_mode(vport, MV_NSS_L2_UCAST_PROMISC, l2_ops & BIT(MV_NSS_L2_UCAST_PROMISC));
 	pp3_fw_port_l2_filter_mode(vport, MV_NSS_L2_MCAST_PROMISC, l2_ops & BIT(MV_NSS_L2_MCAST_PROMISC));
 	pp3_fw_port_l2_filter_mode(vport, MV_NSS_L2_BCAST_ADM, l2_ops & BIT(MV_NSS_L2_BCAST_ADM));
 
 	/* Update l2_options field in virtual port */
-	dev_priv->vport->port.emac.l2_options &=
-		~(BIT(MV_NSS_L2_UCAST_PROMISC) | BIT(MV_NSS_L2_MCAST_PROMISC) | BIT(MV_NSS_L2_BCAST_ADM));
+	dev_priv->vport->port.emac.l2_options &= ~l2_ops_mask;
 	dev_priv->vport->port.emac.l2_options |= l2_ops;
 }
 
