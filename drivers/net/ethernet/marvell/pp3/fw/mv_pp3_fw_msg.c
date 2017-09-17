@@ -163,6 +163,9 @@ static inline int pp3_fw_set_simple_req(enum mv_pp3_fw_msg_opcode opcode, void *
 /* get FW version info */
 int pp3_fw_version_get(struct mv_pp3_version *fw_ver)
 {
+	if (!mv_pp3_fw_is_available())
+		return -1;
+
 	return pp3_fw_set_wait_req(MV_FW_VERSION_GET, NULL, 0, fw_ver, sizeof(struct mv_pp3_version));
 }
 
