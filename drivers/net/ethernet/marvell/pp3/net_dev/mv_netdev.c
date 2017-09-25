@@ -94,6 +94,8 @@ disclaimer.
 #include "net_dev/mv_ptp_hook.c"
 #endif
 
+#define MV_NAPI_POLL_WEIGHT	64
+
 static struct mv_nss_if_ops mv_pp3_nss_if_ops = {
 	.recv_pause     = mv_pp3_dev_rx_pause,
 	.recv_resume    = mv_pp3_dev_rx_resume,
@@ -1638,6 +1640,43 @@ static inline struct sk_buff *mv_pp3_skb_get(struct net_device *dev)
 }
 
 /*---------------------------------------------------------------------------*/
+/* Quick RX drop/flush with no skb processing and refill with same VA/PA */
+static int mv_pp3_quick_rx_flush(struct net_device *dev, struct pp3_vport *cpu_vp,
+				 struct pp3_vq *rx_vq, int budget, int occ_dg)
+{
+	struct pp3_swq *rx_swq = rx_vq->swq;
+	struct pp3_cpu_shared *cpu_shared = cpu_vp->port.cpu.cpu_shared;
+	struct mv_cfh_common *cfh;
+	int num_dg, rx_pkt_done = 0, rx_dg_done = 0;
+	int bpid;
+
+	while ((occ_dg > 0) && (rx_pkt_done < budget)) {
+		cfh = (struct mv_cfh_common *)mv_pp3_hmac_rxq_next_cfh(rx_swq->frame_num, rx_swq->swq, &num_dg);
+		if (!cfh || !num_dg || (num_dg > occ_dg))
+			break;
+
+		occ_dg -= num_dg;
+		rx_dg_done += num_dg;
+		rx_pkt_done++;
+
+		prefetch(cfh);
+		if (!cfh->marker_l) /* no skb/data attached */
+			continue;
+
+		bpid = MV_CFH_BPID_GET(cfh->vm_bp);
+		if ((bpid == cpu_shared->long_pool->pool) ||
+		    (cpu_shared->short_pool && (bpid == cpu_shared->short_pool->pool))) {
+			mv_pp3_pool_buff_put(bpid, (void *)cfh->marker_l, cfh->phys_l);
+		}
+	} /* while */
+
+	if (rx_dg_done > 0)
+		mv_pp3_hmac_rxq_occ_set(rx_swq->frame_num, rx_swq->swq, rx_dg_done);
+
+	return rx_pkt_done;
+}
+
+/*---------------------------------------------------------------------------*/
 /* PP3 driver receive function */
 static int mv_pp3_rx(struct net_device *dev, struct pp3_vport *cpu_vp, struct pp3_vq *rx_vq, int budget)
 {
@@ -1677,8 +1716,10 @@ static int mv_pp3_rx(struct net_device *dev, struct pp3_vport *cpu_vp, struct pp
 	}
 #endif /* CONFIG_MV_PP3_DEBUG_CODE */
 
-	while ((occ_dg > 0) && (rx_pkt_done < budget)) {
+	if (unlikely(!test_bit(MV_PP3_F_IF_UP_BIT, &dev_priv->flags)))
+		return mv_pp3_quick_rx_flush(dev, cpu_vp, rx_vq, budget, occ_dg);
 
+	while ((occ_dg > 0) && (rx_pkt_done < budget)) {
 		/* check if queue was paused through RX */
 		if (!rx_vq->valid)
 			break;
@@ -2331,7 +2372,7 @@ void mv_pp3_netdev_delete(struct net_device *dev)
 	free_netdev(dev);
 	*/
 
-	pr_info("%s: not implemented yet\n", dev->name);
+	pr_info("%s: netdev_delete not implemented yet\n", dev->name);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -2648,20 +2689,23 @@ static void mv_pp3_dev_napi_disable(struct pp3_dev_priv *dev_priv)
 }
 /*---------------------------------------------------------------------------*/
 
-static int mv_pp3_dev_rxq_proc_done(struct pp3_vq *rx_vq)
+static int mv_pp3_dev_rxq_proc_done(char *name, struct pp3_vq *rx_vq)
 {
 	int time_out = 0;
 	int swq = rx_vq->swq->swq;
 	int frame = rx_vq->swq->frame_num;
-	static int time_out_max = 1000;
+	const int time_out_max = 1000;
+	int occ_dg;
 
-	while (mv_pp3_hmac_rxq_occ_get(frame, swq) &&
-			(time_out <= time_out_max))
-		time_out++;
+	do {
+		occ_dg = mv_pp3_hmac_rxq_occ_get(frame, swq);
+		if (!occ_dg)
+			break;
+	} while (time_out++ <= time_out_max);
 
-	if (time_out > time_out_max) {
-		pr_err("Error %s: frame %d, queue %d proc retries exceeded\n",
-			__func__, frame, swq);
+	if (occ_dg) {
+		pr_err("%s: ERROR: rxq(%d:%d) not empty - occ_dg=%d\n",
+		       name, frame, swq, occ_dg);
 		return -1;
 	}
 
@@ -2712,7 +2756,7 @@ static int mv_pp3_dev_queues_proc_done(struct pp3_dev_priv *dev_priv)
 			if (!cpu_vp->rx_vqs[vq])
 				continue;
 
-			if (mv_pp3_dev_rxq_proc_done(cpu_vp->rx_vqs[vq]))
+			if (mv_pp3_dev_rxq_proc_done(dev_priv->dev->name, cpu_vp->rx_vqs[vq]))
 				return -1;
 		}
 
@@ -2878,7 +2922,7 @@ static int mv_pp3_dev_priv_sw_init(struct pp3_dev_priv *dev_priv)
 			goto err;
 
 		/* Init cpu virtual port NAPI */
-		netif_napi_add(dev_priv->dev, &cpu_vp->port.cpu.napi, mv_pp3_poll, 64);
+		netif_napi_add(dev_priv->dev, &cpu_vp->port.cpu.napi, mv_pp3_poll, MV_NAPI_POLL_WEIGHT);
 
 		/* init txdone and rxrefill timers */
 		mv_pp3_timer_init(&cpu_vp->port.cpu.txdone_timer, cpu,
@@ -3036,7 +3080,7 @@ int mv_pp3_dev_stop(struct net_device *dev)
 	/* Down IF_LINK_UP */
 	mv_pp3_dev_down(dev_priv);
 
-	/* set device state in FW to disable */
+	/* set device state in FW to disable (for ETH only) */
 	mv_pp3_dev_fw_down(dev_priv);
 
 	msleep(MV_PP3_TXDONE_TIMER_USEC_PERIOD/1000 + jiffies_to_msecs(1));
@@ -3285,6 +3329,9 @@ static int mv_pp3_tx(struct sk_buff *skb, struct net_device *dev)
 		goto out;
 #endif
 
+	if (unlikely(!test_bit(MV_PP3_F_IF_UP_BIT, &dev_priv->flags)))
+		goto out_no_drop_cnt;
+
 	/* No support for scatter-gather */
 	if (unlikely(skb_is_nonlinear(skb))) {
 		pr_err("%s: no support for scatter-gather\n", dev->name);
@@ -3455,6 +3502,11 @@ out:
 
 	MV_LIGHT_UNLOCK(flags);
 
+	return NETDEV_TX_OK;
+
+out_no_drop_cnt:
+	mv_pp3_skb_free(dev, skb);
+	MV_LIGHT_UNLOCK(flags);
 	return NETDEV_TX_OK;
 }
 /*---------------------------------------------------------------------------*/
