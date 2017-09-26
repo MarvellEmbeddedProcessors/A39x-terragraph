@@ -104,6 +104,17 @@ int mv_pp3_gnss_dev_create(unsigned short vport, bool state, unsigned char *mac)
 		sprintf(name, "nss%d", vport);
 		rxqs_num = mv_pp3_gnss_rxq_num;
 		txqs_num = mv_pp3_gnss_txq_num;
+
+		if (state && (mv_pp3_gnss_vport_type_get(vport) == MV_PP3_NSS_PORT_EXT)) {
+			/* The nssNN already exist. Just make it UP and exit */
+			dev = mv_pp3_vport_dev_get(vport);
+			rtnl_lock();
+			rc = dev_open(dev);
+			rtnl_unlock();
+			if (!rc)
+				pr_err("%s cannot open existing %s\n", __func__,  name);
+			return rc;
+		}
 	}
 
 	/* check MAC validation */
