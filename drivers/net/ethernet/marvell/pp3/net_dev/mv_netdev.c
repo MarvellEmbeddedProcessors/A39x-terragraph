@@ -2547,21 +2547,25 @@ int mv_pp3_netdev_global_init(struct mv_pp3 *priv)
 
 /*---------------------------------------------------------------------------*/
 /* return true if txdoen pool is empty, otherwise return false               */
-static bool mv_pp3_dev_txdone_is_empty(struct pp3_dev_priv *dev_priv)
+static void mv_pp3_dev_txdone_is_empty(struct pp3_dev_priv *dev_priv)
 {
 	struct pp3_pool *ppool = dev_priv->cpu_shared->txdone_pool;
-	int cpu;
+	int cpu, cntr = 0;
 
 	if (!ppool) {
 		pr_err("%s: Invalid txdone pool", dev_priv->dev->name);
-		return -1;
+		return;
 	}
 
 	for_each_possible_cpu(cpu) {
-		if (PPOOL_BUF_TXDONE(ppool, cpu))
-			return false;
+		if (PPOOL_BUF_TXDONE(ppool, cpu)) {
+			cntr += PPOOL_BUF_TXDONE(ppool, cpu);
+			PPOOL_BUF_MISSED(ppool, cpu) = 0;
+			PPOOL_BUF_TXDONE(ppool, cpu) = 0;
+		}
 	}
-	return true;
+	if (cntr)
+		pr_err("%s: txdone pool is not empty (%d)\n", dev_priv->dev->name, cntr);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -3099,10 +3103,7 @@ int mv_pp3_dev_stop(struct net_device *dev)
 
 	mv_pp3_dev_pools_empty(dev_priv);
 
-	if (!mv_pp3_dev_txdone_is_empty(dev_priv)) {
-		pr_err("%s: txdone pool is not empty\n", dev->name);
-		return -1;
-	}
+	mv_pp3_dev_txdone_is_empty(dev_priv);
 
 	pr_info("%s: stopped\n", dev->name);
 
