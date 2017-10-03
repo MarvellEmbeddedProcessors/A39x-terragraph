@@ -337,9 +337,9 @@ int pp3_fw_emac_vport_msg_show(int vport)
 		err = pp3_fw_emac_vport_msg_get(vport, &out_msg);
 	}
 	if (!err) {
-		l2_bcast = (BIT(MV_NSS_L2_BCAST_ADM)) ? "BCAST" : "";
-		l2_allmulti = (BIT(MV_NSS_L2_MCAST_PROMISC)) ? "ALLMULTI" : "";
-		l2_promisc = (BIT(MV_NSS_L2_UCAST_PROMISC)) ? "PROMISC" : "";
+		l2_bcast = (out_msg.l2_options & BIT(MV_NSS_L2_BCAST_ADM)) ? "BCAST" : "";
+		l2_allmulti = (out_msg.l2_options & BIT(MV_NSS_L2_MCAST_PROMISC)) ? "ALLMULTI" : "";
+		l2_promisc = (out_msg.l2_options & BIT(MV_NSS_L2_UCAST_PROMISC)) ? "PROMISC" : "";
 		pr_info("state       : %s\n", out_msg.state ? "Enable" : "Disable");
 		pr_info("mtu         : %u\n", out_msg.mtu);
 		pr_info("def_dst_vp  : %u\n", out_msg.vport_dst);

@@ -2149,10 +2149,7 @@ static int mv_pp3_proc_mac_mc(struct net_device *dev)
 	 * so the ALLMULTI filtering will be set by caller mv_pp3_set_rx_mode().
 	 */
 	if (macs_list_size > MV_PP3_MAC_ADDR_NUM) {
-		mc_list_size = MV_PP3_MAC_ADDR_NUM;
-		pr_err("%s: mac_mc(%d) > max(%d), force allmulti\n",
-		       dev->name, macs_list_size, MV_PP3_MAC_ADDR_NUM);
-		return 1;
+		return macs_list_size;
 	} else {
 		mc_list_size = macs_list_size;
 	}
@@ -2183,7 +2180,7 @@ static int mv_pp3_proc_mac_mc(struct net_device *dev)
 void mv_pp3_set_rx_mode(struct net_device *dev)
 {
 	struct pp3_dev_priv *dev_priv = MV_PP3_PRIV(dev);
-	int vport, ret = 0;
+	int vport, mc_list_size;
 	unsigned char l2_ops;
 	const unsigned char l2_ops_mask = (unsigned char)(BIT(MV_NSS_L2_UCAST_PROMISC) |
 		BIT(MV_NSS_L2_MCAST_PROMISC) | BIT(MV_NSS_L2_BCAST_ADM));
@@ -2193,6 +2190,22 @@ void mv_pp3_set_rx_mode(struct net_device *dev)
 
 	if (dev_priv->vport->type != MV_PP3_NSS_PORT_ETH)
 		return;
+
+	/* The FW flow requires always to set Multicast-list and filtering mode
+	 * disregarding to PROMISC/ALLMULTI request and shadow l2_options
+	 * This is especially imortant for case Linux starts UP an interface
+	 * with PROMISC/ALLMULTI
+	 */
+	if (!netdev_mc_empty(dev)) {
+		/* Accept initialized Multicast */
+		mc_list_size = mv_pp3_proc_mac_mc(dev);
+		if (mc_list_size < 0) {
+			pr_err("%s: failed to set multicast list\n", dev->name);
+			return;
+		}
+	} else {
+		mc_list_size = 0;
+	}
 
 	if (dev->flags & IFF_PROMISC)
 		/* Accept all */
@@ -2204,31 +2217,21 @@ void mv_pp3_set_rx_mode(struct net_device *dev)
 		else {
 			/* Accept Unicast to me */
 			l2_ops = MV_NSS_NON_PROMISC_MODE;
-			/* Accept initialized Multicast */
-			if (!netdev_mc_empty(dev))
-				ret = mv_pp3_proc_mac_mc(dev);
 
-			if (ret < 0) {
-				pr_err("%s: failed to set multicast list\n", dev->name);
-				return;
-			}
-			if (ret > 0) {
-				/* Self-force all multicast */
+			if (mc_list_size) {
 				l2_ops = MV_NSS_ALL_MCAST_MODE;
+				pr_err("%s: mac_mc(%d) > max(%d), force allmulti\n",
+					   dev->name, mc_list_size, MV_PP3_MAC_ADDR_NUM);
 			}
 		}
 	}
-	vport = dev_priv->vport->vport;
-
-	if ((dev_priv->vport->port.emac.l2_options & l2_ops_mask) == l2_ops)
-		return; /* Already in FW, no update required */
-
 	/* set/clear relevant bits in fw l2 ops bitmap */
 	pp3_fw_port_l2_filter_mode(vport, MV_NSS_L2_UCAST_PROMISC, l2_ops & BIT(MV_NSS_L2_UCAST_PROMISC));
 	pp3_fw_port_l2_filter_mode(vport, MV_NSS_L2_MCAST_PROMISC, l2_ops & BIT(MV_NSS_L2_MCAST_PROMISC));
 	pp3_fw_port_l2_filter_mode(vport, MV_NSS_L2_BCAST_ADM, l2_ops & BIT(MV_NSS_L2_BCAST_ADM));
 
 	/* Update l2_options field in virtual port */
+	vport = dev_priv->vport->vport;
 	dev_priv->vport->port.emac.l2_options &= ~l2_ops_mask;
 	dev_priv->vport->port.emac.l2_options |= l2_ops;
 }
