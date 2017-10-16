@@ -2225,13 +2225,13 @@ void mv_pp3_set_rx_mode(struct net_device *dev)
 			}
 		}
 	}
+	vport = dev_priv->vport->vport;
 	/* set/clear relevant bits in fw l2 ops bitmap */
 	pp3_fw_port_l2_filter_mode(vport, MV_NSS_L2_UCAST_PROMISC, l2_ops & BIT(MV_NSS_L2_UCAST_PROMISC));
 	pp3_fw_port_l2_filter_mode(vport, MV_NSS_L2_MCAST_PROMISC, l2_ops & BIT(MV_NSS_L2_MCAST_PROMISC));
 	pp3_fw_port_l2_filter_mode(vport, MV_NSS_L2_BCAST_ADM, l2_ops & BIT(MV_NSS_L2_BCAST_ADM));
 
 	/* Update l2_options field in virtual port */
-	vport = dev_priv->vport->vport;
 	dev_priv->vport->port.emac.l2_options &= ~l2_ops_mask;
 	dev_priv->vport->port.emac.l2_options |= l2_ops;
 }
