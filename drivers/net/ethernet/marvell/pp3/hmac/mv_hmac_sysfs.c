@@ -40,6 +40,7 @@ static ssize_t mv_hmac_help(char *b)
 	o += scnprintf(b+o, PAGE_SIZE-o, "echo [f] [q] [m] > rxq_show    - show RX queue status\n");
 	o += scnprintf(b+o, PAGE_SIZE-o, "echo [f] [q] [m] > txq_show    - show TX queue status\n");
 	o += scnprintf(b+o, PAGE_SIZE-o, "echo [f] [q] [c] > txq_cap     - change TX queue capacity in datagrams\n");
+	o += scnprintf(b+o, PAGE_SIZE-o, "echo [f] [q] [c] > rxq_bp      - change RX queue BackPresure in datagrams\n");
 	o += scnprintf(b+o, PAGE_SIZE-o, "echo [u]         > reg_read    - read global unit register\n");
 	o += scnprintf(b+o, PAGE_SIZE-o, "echo [u] [v]     > reg_write   - write global unit register\n");
 	o += scnprintf(b+o, PAGE_SIZE-o, "echo [f] [u]     > f_reg_read  - read frame unit register\n");
@@ -135,6 +136,8 @@ static ssize_t mv_hmac_3_dec_store(struct device *dev,
 		mv_pp3_hmac_rxq_regs_dump(p, u);
 	else if (!strcmp(name, "txq_regs"))
 		mv_pp3_hmac_txq_regs_dump(p, u);
+	else if (!strcmp(name, "rxq_bp"))
+		err = mv_pp3_hmac_rxq_bp_thresh_set(p, u, v);
 	else if (!strcmp(name, "txq_cap")) {
 		if (mv_pp3_hmac_txq_capacity_cfg(p, u, v) != 0)
 			pr_err("Bad queue capacity value %d. Must be large than 8 and less than queue size\n", v);
@@ -169,6 +172,7 @@ static DEVICE_ATTR(f_regs, S_IWUSR, NULL, mv_hmac_3_dec_store);
 static DEVICE_ATTR(rxq_regs, S_IWUSR, NULL, mv_hmac_3_dec_store);
 static DEVICE_ATTR(txq_regs, S_IWUSR, NULL, mv_hmac_3_dec_store);
 static DEVICE_ATTR(txq_cap, S_IWUSR, NULL, mv_hmac_3_dec_store);
+static DEVICE_ATTR(rxq_bp, S_IWUSR, NULL, mv_hmac_3_dec_store);
 static DEVICE_ATTR(rxq_show, S_IWUSR, NULL, mv_hmac_3_dec_store);
 static DEVICE_ATTR(txq_show, S_IWUSR, NULL, mv_hmac_3_dec_store);
 static DEVICE_ATTR(reg_write, S_IWUSR, NULL, mv_hmac_3_hex_store);
@@ -184,6 +188,7 @@ static struct attribute *mv_hmac_attrs[] = {
 	&dev_attr_rxq_regs.attr,
 	&dev_attr_txq_regs.attr,
 	&dev_attr_txq_cap.attr,
+	&dev_attr_rxq_bp.attr,
 	&dev_attr_rxq_show.attr,
 	&dev_attr_txq_show.attr,
 	&dev_attr_reg_write.attr,
