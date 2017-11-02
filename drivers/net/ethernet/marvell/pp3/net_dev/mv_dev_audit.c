@@ -332,10 +332,13 @@ static inline void check_rx_swq_dev(int idx, int cpu)
 				info->no_traffic_cntr[q]++;
 			if (info->no_traffic_cntr[q] <= 2) {
 				/* RX just stopped, check not by abnormal */
-				info->occ_dg[q] = mv_pp3_hmac_rxq_occ_get(rx_swq->frame_num, rx_swq->swq);
-				if (info->occ_dg[q] >= MV_AUDIT_HMAC_SWQ_THRESH) {
-					info->irq_dis = mv_pp3_vp_rx_int_is_masked(cpu_vp);
-					mv_audit_alarm(MV_AUDIT_EV_DEV_RX_SWQ_OVERLOAD, idx);
+				if (cpu_vp->rx_vqs[q]->valid) {
+					/* (!valid) is under pause/suspend. OCC-full is ok in that case */
+					info->occ_dg[q] = mv_pp3_hmac_rxq_occ_get(rx_swq->frame_num, rx_swq->swq);
+					if (info->occ_dg[q] >= MV_AUDIT_HMAC_SWQ_THRESH) {
+						info->irq_dis = mv_pp3_vp_rx_int_is_masked(cpu_vp);
+						mv_audit_alarm(MV_AUDIT_EV_DEV_RX_SWQ_OVERLOAD, idx);
+					}
 				}
 			}
 		}
