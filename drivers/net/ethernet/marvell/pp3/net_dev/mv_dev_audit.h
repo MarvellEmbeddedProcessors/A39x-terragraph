@@ -30,6 +30,7 @@ int mv_pp3_audit_drop_thrsh_set(int thrsh_pkt_per_sec);
 int mv_pp3_audit_alarm_get(char *buf, int buf_len);
 int mv_pp3_audit_warn_get(char *buf, int buf_len);
 void mv_pp3_audit_alarm_emulate(void);
+void mv_pp3_audit_alarm_clear(struct net_device *dev, int event_bit, int force);
 #else
 static inline int mv_pp3_audit_init(void)	{ return 0; }
 static inline void mv_pp3_audit_open(struct net_device *dev) { }
@@ -39,6 +40,7 @@ static inline int mv_pp3_audit_drop_thrsh_set(int thrsh_pkt_per_sec) { return 0;
 static inline int mv_pp3_audit_alarm_get(char *buf, int buf_len) { return 0; }
 static inline int mv_pp3_audit_warn_get(char *buf, int buf_len) { return 0; }
 static inline void mv_pp3_audit_alarm_emulate(void) { }
+static inline void mv_pp3_audit_alarm_clear(struct net_device *dev, int event_bit, int force) { }
 #endif
 
 #endif /*_MV_DEV_AUDIT_H_*/

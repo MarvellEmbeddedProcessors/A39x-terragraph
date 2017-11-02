@@ -45,11 +45,12 @@ MV_HLP("cat  help                                - show this help\n");
 MV_HLP("echo  0|1     >  mv_log_enable           - Disable|Enable mv_log (on restart is enabled)\n");
 MV_HL1("                                            on Disable save buffer to %s\n", mv_log_fname_dflt_get());
 MV_HLP("cat              mv_log                  - print mv_log buffer to Console\n");
-/* HIDDEN     -1      >  audit_poll_period   - emulate all Audit's Warnings and Alarms */
-MV_HLP("echo <NN>     >  audit_poll_period       - set Audit polling period [10..120] sec\n");
-MV_HLP("echo <DEC>    >  audit_drop_thrsh        - Warning: drop > threshold. 10pkt/sec=Dflt, 0=disable\n");
-MV_HLP("cat              audit_show              - show audit accumulated reports\n");
-MV_HLP("cat              audit_nss               - only returns 0=OK or error on Alarm\n");
+MV_HLP("echo <NN>         >  audit_poll_period   - set Audit polling period [10..120] sec\n");
+MV_HLP("echo  -1          >  audit_poll_period   - emulate all Audit's Warnings and Alarms\n");
+MV_HLP("echo <DEC>        >  audit_drop_thrsh    - Warning: drop > threshold. 10pkt/sec=Dflt, 0=disable\n");
+MV_HLP("echo [ifname|all] >  audit_alarm_clear   - clear Alarms for interface or all\n");
+MV_HLP("cat                  audit_show          - show audit accumulated reports\n");
+MV_HLP("cat                  audit_nss           - only returns 0=OK or error on Alarm\n");
 MV_HLP("\n");
 MV_HLP("echo [ifname]           > mac_show       - show MAC addresses for network interface\n");
 #if 0
@@ -225,13 +226,24 @@ static ssize_t pp3_dev_debug_store(struct device *dev,
 
 	netdev = dev_get_by_name(&init_net, if_name);
 	if (!mv_pp3_dev_is_valid(netdev)) {
+		if (!strcmp(name, "audit_alarm_clear") && !strcmp(if_name, "all"))
+			goto handling;
 		pr_err("%s in not pp3 device\n", if_name);
 		if (netdev)
 			dev_put(netdev);
 		return -EINVAL;
 	}
 
+handling:
 	local_irq_save(flags);
+
+	if (!strcmp(name, "audit_alarm_clear")) {
+		mv_pp3_audit_alarm_clear(netdev, 0xff, 1);
+		if (netdev)
+			dev_put(netdev);
+		err = 0;
+		goto end;
+	}
 
 	if (!strcmp(name, "debug")) {
 		if (fields == 2) {
@@ -264,7 +276,7 @@ static ssize_t pp3_dev_debug_store(struct device *dev,
 	} else {
 		pr_err("%s: illegal operation <%s>\n", __func__, attr->attr.name);
 	}
-
+end:
 	local_irq_restore(flags);
 
 	if (err)
@@ -279,6 +291,7 @@ static DEVICE_ATTR(audit_show,		S_IRUSR, pp3_dev_debug_show, NULL);
 static DEVICE_ATTR(audit_nss,		S_IRUSR, pp3_dev_debug_show, NULL);
 static DEVICE_ATTR(mv_log_enable,	S_IWUSR, NULL, pp3_dev_debug_dec_store);
 static DEVICE_ATTR(audit_poll_period,	S_IWUSR, NULL, pp3_dev_debug_dec_store);
+static DEVICE_ATTR(audit_alarm_clear,	S_IWUSR, NULL, pp3_dev_debug_store);
 static DEVICE_ATTR(audit_drop_thrsh,	S_IWUSR, NULL, pp3_dev_debug_dec_store);
 static DEVICE_ATTR(internal_debug,	S_IWUSR, NULL, pp3_dev_debug_dec_store);
 static DEVICE_ATTR(debug,		S_IWUSR, NULL, pp3_dev_debug_store);
@@ -301,6 +314,7 @@ static struct attribute *pp3_dev_debug_attrs[] = {
 	&dev_attr_audit_nss.attr,
 	&dev_attr_mv_log_enable.attr,
 	&dev_attr_audit_poll_period.attr,
+	&dev_attr_audit_alarm_clear.attr,
 	&dev_attr_audit_drop_thrsh.attr,
 	&dev_attr_debug.attr,
 	&dev_attr_mac_show.attr,

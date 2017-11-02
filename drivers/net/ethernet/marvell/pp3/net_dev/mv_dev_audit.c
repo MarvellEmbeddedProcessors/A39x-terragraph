@@ -82,6 +82,8 @@ struct mv_audit {
 	int active_dev_cnt;
 	int poll_sec;
 	int poll_sec_postmortem;
+	int poll_sec_orig;
+	int poll_restart;
 
 	u32 alarm;
 	u64 al_ts_sec;
@@ -110,6 +112,7 @@ int mv_pp3_audit_poll_period_sec_set(int sec)
 	}
 	thrsh_pkt_per_sec = aud->rx_netif_drop_thrsh / aud->poll_sec;
 	aud->poll_sec = sec;
+	aud->poll_sec_orig = aud->poll_sec;
 	sec *= 2;
 	if (sec > MV_AUDIT_POLL_SEC_POSTMORTEM_MAX)
 		sec = MV_AUDIT_POLL_SEC_POSTMORTEM_MAX;
@@ -228,12 +231,59 @@ static void mv_audit_warning(u32 event, int idx)
 	aud->warn_expire_ts = w_ts + aud->poll_cycle_cntr;
 }
 
-static inline void mv_audit_warning_clear(struct mv_audit *ad)
+static inline void mv_audit_warning_clear(struct mv_audit *ad, int force)
 {
 	if (ad->alarm) /* Keep last warning before alarm */
 		return;
+	if (force)
+		aud->warn_expire_ts = ad->poll_cycle_cntr++;
 	if (ad->poll_cycle_cntr == aud->warn_expire_ts)
 		ad->warn_str[0] = 0;
+}
+
+void mv_pp3_audit_alarm_clear(struct net_device *dev, int event_bit, int force)
+{
+	struct mv_per_dev *info;
+	bool cleared = false;
+	int i;
+
+	if ((event_bit & MV_AUDIT_EV_DEV_RX_SWQ_OVERLOAD) &&
+	    strstr(aud->alarm_str, "occ_dg=")) {
+		if (dev && !strstr(aud->alarm_str, dev->name)) {
+			pr_info(MV_AUDIT_PREF "Can't clear alarm: %s not alaremed\n", dev->name);
+			return;
+		}
+		for (i = 0; i < MV_AUDIT_DEVS; i++) {
+			info = &aud->info[i];
+			if (info->dev) {
+				if (dev	&& (info->dev != dev))
+					continue;
+				if (!force && info->irq_dis) {
+					pr_info(MV_AUDIT_PREF "Can't clear %s alarm: RX-int Disabled\n",
+						info->dev->name);
+					continue;
+				}
+				memset(info->pkts_prev, 0,
+				       CONFIG_MV_PP3_TXQ_NUM * sizeof(info->pkts_prev[0]));
+				memset(info->no_traffic_cntr, 0,
+				       CONFIG_MV_PP3_TXQ_NUM * sizeof(info->no_traffic_cntr[0]));
+				memset(info->occ_dg, 0,
+				       CONFIG_MV_PP3_TXQ_NUM * sizeof(info->occ_dg[0]));
+				info->irq_dis = 0;
+				cleared = true;
+			}
+		}
+	}
+	if (!dev && force)
+		cleared = true;
+	if (cleared) {
+		aud->alarm = 0;
+		aud->alarm_str[0] = 0;
+		aud->alarm_str_len = 0;
+		aud->poll_sec = aud->poll_sec_orig;
+		mv_audit_warning_clear(aud, 1);
+		aud->poll_restart = 1;
+	}
 }
 
 static void mv_audit_alarm(u32 event, int idx)
@@ -440,13 +490,21 @@ report:
 static int mv_audit_task(void *data)
 {
 	struct mv_audit *ad = (struct mv_audit *)data; /* Audit Descriptor */
+	int sec;
 
 	while (!kthread_should_stop()) {
 		schedule();
 		mv_audit_check();
-		mv_audit_warning_clear(ad);
+		mv_audit_warning_clear(ad, 0);
 		ad->poll_cycle_cntr++;
-		ssleep(ad->poll_sec);
+		sec = ad->poll_sec;
+		while (sec--) {
+			if (ad->poll_restart) {
+				ad->poll_restart = 0;
+				sec = ad->poll_sec;
+			}
+			ssleep(1);
+		}
 	}
 	/*do_exit(1);*/
 	ad->task_ended = true;
@@ -462,6 +520,7 @@ int mv_pp3_audit_init(void)
 	if (!aud)
 		return -ENOMEM;
 	aud->poll_sec = MV_AUDIT_POLL_SEC;
+	aud->poll_sec_orig = aud->poll_sec;
 	aud->poll_sec_postmortem = MV_AUDIT_POLL_SEC_POSTMORTEM;
 	aud->rx_netif_drop_thrsh = MV_WARN_IF_TO_WIFI_THRSH * aud->poll_sec;
 	aud->task = kthread_create(&mv_audit_task, (void *)aud, "mv_audit_rx");
